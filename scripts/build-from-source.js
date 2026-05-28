@@ -6,13 +6,24 @@ import { fileURLToPath } from "url";
 
 const args = ["configure"];
 
+const generator =
+  process.env.CMAKE_GENERATOR ||
+  (process.platform === "win32"
+    ? process.env.GITHUB_ACTIONS || process.env.CI
+      ? "Ninja"
+      : "Visual Studio 16 2019"
+    : undefined);
+
+const generatorArg =
+  generator && generator.includes(" ") ? `"${generator}"` : generator;
+
 if (process.env.DEBUG) {
   args.push("--debug");
 }
 
-if (process.platform === "win32") {
+if (generatorArg) {
   args.push("-g");
-  args.push('"Visual Studio 16 2019"');
+  args.push(generatorArg);
 }
 
 function main() {

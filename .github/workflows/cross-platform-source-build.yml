@@ -37,9 +37,20 @@ jobs:
         run: |
           choco install ninja -y --no-progress
 
-      - name: Build from source
+      - name: Build from source (Linux)
+        if: runner.os == 'Linux'
         env:
           SKIP_DOWNLOAD: true
+          CMAKE_GENERATOR: Ninja
+          LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+          LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+        run: npm install
+
+      - name: Build from source (Windows)
+        if: runner.os == 'Windows'
+        env:
+          SKIP_DOWNLOAD: true
+          CMAKE_GENERATOR: Ninja
         run: npm install
 
       - name: Smoke load addon

@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.4",
-    "nan": "^2.3.2",
     "node-addon-api": "^1.6.2",
     "node-cmake": "2.3.2",
     "node-pre-gyp": "^0.17.0"
@@ -42,12 +41,10 @@
   ],
   "devDependencies": {
     "@types/node": "^22.13.10",
-    "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.2",
     "@fidm/x509": "^1.2.1",
     "@octokit/rest": "^18.12.0",
-    "aws-sdk": "^2.2.10",
     "browserify-middleware": "^8.1.1",
     "cross-env": "^5.1.4",
     "eslint": "^4.14.0",
@@ -70,7 +67,6 @@
     "request": "^2.88.0",
     "request-promise-native": "^1.0.5",
     "rimraf": "^2.6.2",
-    "semver": "^5.5.0",
     "server-destroy": "^1.0.1",
     "simple-peer": "~9.7.0",
     "rollup": "^4.34.6",
