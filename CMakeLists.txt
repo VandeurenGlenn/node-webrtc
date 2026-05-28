@@ -131,6 +131,9 @@ set_target_properties(libc++abi PROPERTIES IMPORTED_OBJECTS_DEBUG "${libc++abi_o
 
 set(WEBRTC_REVISION branch-heads/4500)
 
+option(WEBRTC_MODERN_APPLE_COMPAT "Enable compatibility flags for modern Xcode/SDK on macOS" ON)
+option(WEBRTC_USE_SYSTEM_XCODE_CLANG "Use Xcode clang toolchain for libwebrtc on macOS" ON)
+
 list(APPEND GN_GEN_ARGS
   rtc_build_examples=false
   rtc_use_x11=false
@@ -173,7 +176,39 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else()
   list(APPEND GN_GEN_ARGS is_debug=false)
 endif()
+if (APPLE)
+  list(APPEND GN_GEN_ARGS use_system_xcode=true)
+  if (WEBRTC_MODERN_APPLE_COMPAT)
+    list(APPEND GN_GEN_ARGS
+      treat_warnings_as_errors=false
+      fatal_linker_warnings=false
+    )
+  endif()
+  if (WEBRTC_USE_SYSTEM_XCODE_CLANG AND DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
+    list(APPEND GN_GEN_ARGS
+      clang_base_path="$ENV{DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr"
+      clang_use_chrome_plugins=false
+    )
+  endif()
+endif()
+if (APPLE AND DEFINED ENV{SDKROOT} AND NOT "$ENV{SDKROOT}" STREQUAL "")
+  list(APPEND GN_GEN_ARGS mac_sdk_path="$ENV{SDKROOT}")
+endif()
 string(REPLACE ";" " " GN_GEN_ARGS "${GN_GEN_ARGS}")
+
+set(webrtc_build_env)
+if (DEFINED ENV{PATH} AND NOT "$ENV{PATH}" STREQUAL "")
+  list(APPEND webrtc_build_env PATH=$ENV{PATH})
+endif()
+if (DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
+  list(APPEND webrtc_build_env DEVELOPER_DIR=$ENV{DEVELOPER_DIR})
+endif()
+if (DEFINED ENV{SDKROOT} AND NOT "$ENV{SDKROOT}" STREQUAL "")
+  list(APPEND webrtc_build_env SDKROOT=$ENV{SDKROOT})
+endif()
+if (DEFINED ENV{FORCE_MAC_SDK_MIN} AND NOT "$ENV{FORCE_MAC_SDK_MIN}" STREQUAL "")
+  list(APPEND webrtc_build_env FORCE_MAC_SDK_MIN=$ENV{FORCE_MAC_SDK_MIN})
+endif()
 
 if(WIN32)
   set(suffix bat)
@@ -215,9 +250,9 @@ ExternalProject_Add(
 
   BUILD_BYPRODUCTS  ${byproducts}
 
-  DOWNLOAD_COMMAND  ${CMAKE_COMMAND} -E env DEPOT_TOOLS=${depot_tools_install_dir} PLATFORM=${PLATFORM} WEBRTC_REVISION=${WEBRTC_REVISION} ${CMAKE_SOURCE_DIR}/scripts/download-webrtc.${suffix}
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env BINARY_DIR=<BINARY_DIR> DEPOT_TOOLS=${depot_tools_install_dir} GN_GEN_ARGS=${GN_GEN_ARGS} SOURCE_DIR=<SOURCE_DIR> ${CMAKE_SOURCE_DIR}/scripts/configure-webrtc.${suffix}
-  BUILD_COMMAND     ${CMAKE_COMMAND} -E env CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} DEPOT_TOOLS=${depot_tools_install_dir} ${CMAKE_SOURCE_DIR}/scripts/build-webrtc.${suffix}
+  DOWNLOAD_COMMAND  ${CMAKE_COMMAND} -E env ${webrtc_build_env} DEPOT_TOOLS=${depot_tools_install_dir} PLATFORM=${PLATFORM} WEBRTC_REVISION=${WEBRTC_REVISION} ${CMAKE_SOURCE_DIR}/scripts/download-webrtc.${suffix}
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${webrtc_build_env} BINARY_DIR=<BINARY_DIR> DEPOT_TOOLS=${depot_tools_install_dir} GN_GEN_ARGS=${GN_GEN_ARGS} SOURCE_DIR=<SOURCE_DIR> ${CMAKE_SOURCE_DIR}/scripts/configure-webrtc.${suffix}
+  BUILD_COMMAND     ${CMAKE_COMMAND} -E env ${webrtc_build_env} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} DEPOT_TOOLS=${depot_tools_install_dir} ${CMAKE_SOURCE_DIR}/scripts/build-webrtc.${suffix}
   INSTALL_COMMAND   ""
 )
 

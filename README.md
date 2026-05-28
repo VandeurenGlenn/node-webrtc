@@ -118,3 +118,10 @@ Contributing
 ------------
 
 Contributions welcome! Please refer to the [wiki](https://github.com/node-webrtc/node-webrtc/wiki/Contributing).
+
+Benchmarking
+------------
+
+A repeatable benchmark harness is available to detect performance regressions while improving the library.
+
+See [docs/benchmarking.md](docs/benchmarking.md) for usage and workflow.

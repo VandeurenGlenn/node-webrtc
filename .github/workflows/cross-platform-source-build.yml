@@ -1,0 +1,49 @@
+name: Cross Platform Source Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  source-build:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [26]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install ninja (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install ninja (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ninja -y --no-progress
+
+      - name: Build from source
+        env:
+          SKIP_DOWNLOAD: true
+        run: npm install
+
+      - name: Smoke load addon
+        run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"
+
+      - name: Benchmark smoke
+        run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5

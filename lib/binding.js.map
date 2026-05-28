@@ -1,0 +1,1 @@
+{"version":3,"file":"binding.js","sources":["../src/src/lib/binding.ts"],"sourcesContent":[null],"names":["require"],"mappings":";;AAAA;AAKA,MAAMA,SAAO,GAAG,aAAa,CAAC,MAAM,CAAC,IAAI,CAAC,GAAG,CAAC;AAE9C,IAAI,OAAO;AAEX,IAAI;AACF,IAAA,OAAO,GAAGA,SAAO,CAAC,0BAA0B,CAAC;AAC/C;AAAE,OAAO,KAAK,EAAE;AACd,IAAA,OAAO,GAAGA,SAAO,CAAC,4BAA4B,CAAC;AACjD;AAEA,gBAAe,OAAO;;;;"}

@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "lib": ["ES2020", "DOM"],
+        "rootDir": "src/lib",
+        "sourceMap": true,
+        "declaration": true,
+        "outDir": "lib",
+    },
+    "include": ["src/lib/**/*.ts"],
+    "exclude": ["node_modules", "lib"]
+}

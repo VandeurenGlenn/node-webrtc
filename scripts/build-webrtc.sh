@@ -4,7 +4,18 @@ set -e
 
 set -v
 
+NINJA_BIN=$(command -v ninja || true)
+
 export PATH=$DEPOT_TOOLS:$PATH
+
+if [ -z "$NINJA_BIN" ]; then
+  NINJA_BIN=$(command -v ninja || true)
+fi
+
+if [ -z "$NINJA_BIN" ]; then
+  echo "Could not find ninja on PATH" >&2
+  exit 1
+fi
 
 export TARGETS="webrtc libjingle_peerconnection"
 if [[ "$(uname)" == "Linux" && "$TARGET_ARCH" == arm* ]]; then
@@ -15,7 +26,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 if [ -z "$PARALLELISM" ]; then
-  ninja $TARGETS
+  "$NINJA_BIN" $TARGETS
 else
-  ninja $TARGETS -j $PARALLELISM
+  "$NINJA_BIN" $TARGETS -j $PARALLELISM
 fi

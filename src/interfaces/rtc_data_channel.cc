@@ -48,8 +48,10 @@ void DataChannelObserver::OnStateChange() {
 }
 
 void DataChannelObserver::OnMessage(const webrtc::DataBuffer& buffer) {
-  Enqueue(Callback1<RTCDataChannel>::Create([buffer](RTCDataChannel & channel) {
-    RTCDataChannel::HandleMessage(channel, buffer);
+  auto payload = rtc::CopyOnWriteBuffer(buffer.data);
+  auto binary = buffer.binary;
+  Enqueue(Callback1<RTCDataChannel>::Create([binary, payload = std::move(payload)](RTCDataChannel & channel) mutable {
+    RTCDataChannel::HandleMessage(channel, binary, std::move(payload));
   }));
 }
 
@@ -146,27 +148,32 @@ void RTCDataChannel::HandleStateChange(RTCDataChannel& channel, webrtc::DataChan
 }
 
 void RTCDataChannel::OnMessage(const webrtc::DataBuffer& buffer) {
-  Dispatch(CreateCallback<RTCDataChannel>([this, buffer]() {
-    RTCDataChannel::HandleMessage(*this, buffer);
+  auto payload = rtc::CopyOnWriteBuffer(buffer.data);
+  auto binary = buffer.binary;
+  Dispatch(CreateCallback<RTCDataChannel>([this, binary, payload = std::move(payload)]() mutable {
+    RTCDataChannel::HandleMessage(*this, binary, std::move(payload));
   }));
 }
 
-void RTCDataChannel::HandleMessage(RTCDataChannel& channel, const webrtc::DataBuffer& buffer) {
-  bool binary = buffer.binary;
-  size_t size = buffer.size();
+void RTCDataChannel::HandleMessage(RTCDataChannel& channel, bool binary, rtc::CopyOnWriteBuffer payload) {
+  auto size = payload.size();
 
   auto env = channel.Env();
   Napi::HandleScope scope(env);
   Napi::Value value;
   if (binary) {
-    char* message = new char[size];
-    memcpy(reinterpret_cast<void*>(message), reinterpret_cast<const void*>(buffer.data.data()), size);
-    auto array = Napi::ArrayBuffer::New(env, message, size, [](Napi::Env, void* buffer) {
-      delete[] static_cast<char*>(buffer);
-    });
+    auto message = new rtc::CopyOnWriteBuffer(std::move(payload));
+    auto array = Napi::ArrayBuffer::New(
+      env,
+      const_cast<uint8_t*>(message->data()),
+      size,
+      [](Napi::Env, void*, rtc::CopyOnWriteBuffer* ownedMessage) {
+        delete ownedMessage;
+      },
+      message);
     value = array;  // NOLINT
   } else {
-    auto str = Napi::String::New(env, reinterpret_cast<const char*>(buffer.data.data()), size);  // NOLINT
+    auto str = Napi::String::New(env, reinterpret_cast<const char*>(payload.data()), size);  // NOLINT
     value = str;
   }
   auto object = Napi::Object::New(env);

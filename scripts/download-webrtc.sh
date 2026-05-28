@@ -10,7 +10,12 @@ gclient config --unmanaged --spec 'solutions=[{"name":"src","url":"https://webrt
 
 gclient sync --shallow --no-history --nohooks --with_branch_heads -r ${WEBRTC_REVISION} -R
 
-python src/tools/clang/scripts/update.py
+PYTHON_BIN=python
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+	PYTHON_BIN=python3
+fi
+
+"$PYTHON_BIN" src/tools/clang/scripts/update.py
 
 rm -f webrtc
 
