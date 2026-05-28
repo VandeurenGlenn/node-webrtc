@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "timestamp": "2026-05-28T20:56:26.501Z",
+    "node": "v26.2.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "commit": "33aab86",
+    "iterations": 25,
+    "warmup": 5,
+    "compareRuns": 3,
+    "messagesPerIteration": 100,
+    "binaryPayloadBytes": 1024
+  },
+  "scenarios": {
+    "pc_create_close_ms": {
+      "min": 0.398,
+      "max": 0.625,
+      "mean": 0.489,
+      "median": 0.466,
+      "p95": 0.593,
+      "stddev": 0.055,
+      "runs": 3
+    },
+    "pc_negotiate_datachannel_open_ms": {
+      "min": 3.229,
+      "max": 4.348,
+      "mean": 3.805,
+      "median": 3.817,
+      "p95": 4.223,
+      "stddev": 0.349,
+      "runs": 3
+    },
+    "datachannel_unordered_unreliable_rtt_ms": {
+      "min": 0.098,
+      "max": 0.115,
+      "mean": 0.106,
+      "median": 0.103,
+      "p95": 0.114,
+      "stddev": 0.004,
+      "runs": 3
+    },
+    "datachannel_unordered_unreliable_binary_rtt_ms": {
+      "min": 0.108,
+      "max": 0.13,
+      "mean": 0.117,
+      "median": 0.115,
+      "p95": 0.123,
+      "stddev": 0.004,
+      "runs": 3
+    }
+  },
+  "comparison": null
+}

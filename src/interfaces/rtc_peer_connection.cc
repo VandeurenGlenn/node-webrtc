@@ -77,6 +77,7 @@ RTCPeerConnection::RTCPeerConnection(const Napi::CallbackInfo& info)
   CONVERT_ARGS_OR_THROW_AND_RETURN_VOID_NAPI(info, maybeConfiguration, Maybe<ExtendedRTCConfiguration>)
 
   auto configuration = maybeConfiguration.FromMaybe(ExtendedRTCConfiguration());
+  _cached_configuration = configuration;
 
   // TODO(mroberts): Read `factory` (non-standard) from RTCConfiguration?
   _factory = PeerConnectionFactory::GetOrCreateDefault();
@@ -501,6 +502,8 @@ Napi::Value RTCPeerConnection::SetConfiguration(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
 
+  _cached_configuration = ExtendedRTCConfiguration(_jinglePeerConnection->GetConfiguration(), _port_range);
+
   return env.Undefined();
 }
 
@@ -580,13 +583,11 @@ Napi::Value RTCPeerConnection::UpdateIce(const Napi::CallbackInfo& info) {
 
 Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
   if (_jinglePeerConnection) {
-    _cached_configuration = ExtendedRTCConfiguration(
-            _jinglePeerConnection->GetConfiguration(),
-            _port_range);
+    auto sdpSemantics = _cached_configuration.configuration.sdp_semantics;
     _jinglePeerConnection->Close();
     // NOTE(mroberts): Perhaps another way to do this is to just register all remote MediaStreamTracks against this
     // RTCPeerConnection, not unlike what we do with RTCDataChannels.
-    if (_jinglePeerConnection->GetConfiguration().sdp_semantics == webrtc::SdpSemantics::kUnifiedPlan) {
+    if (sdpSemantics == webrtc::SdpSemantics::kUnifiedPlan) {
       for (const auto& transceiver : _jinglePeerConnection->GetTransceivers()) {
         auto track = MediaStreamTrack::wrap()->GetOrCreate(_factory, transceiver->receiver()->track());
         track->OnPeerConnectionClosed();

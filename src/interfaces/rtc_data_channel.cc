@@ -48,10 +48,9 @@ void DataChannelObserver::OnStateChange() {
 }
 
 void DataChannelObserver::OnMessage(const webrtc::DataBuffer& buffer) {
-  auto payload = rtc::CopyOnWriteBuffer(buffer.data);
-  auto binary = buffer.binary;
-  Enqueue(Callback1<RTCDataChannel>::Create([binary, payload = std::move(payload)](RTCDataChannel & channel) mutable {
-    RTCDataChannel::HandleMessage(channel, binary, std::move(payload));
+  auto* ownedBuffer = new webrtc::DataBuffer(buffer);
+  Enqueue(Callback1<RTCDataChannel>::Create([ownedBuffer](RTCDataChannel & channel) {
+    RTCDataChannel::HandleOwnedMessage(channel, ownedBuffer);
   }));
 }
 
@@ -148,21 +147,21 @@ void RTCDataChannel::HandleStateChange(RTCDataChannel& channel, webrtc::DataChan
 }
 
 void RTCDataChannel::OnMessage(const webrtc::DataBuffer& buffer) {
-  auto payload = rtc::CopyOnWriteBuffer(buffer.data);
-  auto binary = buffer.binary;
-  Dispatch(CreateCallback<RTCDataChannel>([this, binary, payload = std::move(payload)]() mutable {
-    RTCDataChannel::HandleMessage(*this, binary, std::move(payload));
+  auto* ownedBuffer = new webrtc::DataBuffer(buffer);
+  Dispatch(CreateCallback<RTCDataChannel>([this, ownedBuffer]() {
+    RTCDataChannel::HandleOwnedMessage(*this, ownedBuffer);
   }));
 }
 
-void RTCDataChannel::HandleMessage(RTCDataChannel& channel, bool binary, rtc::CopyOnWriteBuffer payload) {
-  auto size = payload.size();
+void RTCDataChannel::HandleMessage(RTCDataChannel& channel, const webrtc::DataBuffer& buffer) {
+  bool binary = buffer.binary;
+  size_t size = buffer.size();
 
   auto env = channel.Env();
   Napi::HandleScope scope(env);
   Napi::Value value;
   if (binary) {
-    auto message = new rtc::CopyOnWriteBuffer(std::move(payload));
+    auto message = new rtc::CopyOnWriteBuffer(buffer.data);
     auto array = Napi::ArrayBuffer::New(
       env,
       const_cast<uint8_t*>(message->data()),
@@ -173,9 +172,44 @@ void RTCDataChannel::HandleMessage(RTCDataChannel& channel, bool binary, rtc::Co
       message);
     value = array;  // NOLINT
   } else {
-    auto str = Napi::String::New(env, reinterpret_cast<const char*>(payload.data()), size);  // NOLINT
+    auto str = Napi::String::New(env, reinterpret_cast<const char*>(buffer.data.data()), size);  // NOLINT
     value = str;
   }
+  auto object = Napi::Object::New(env);
+  object.Set("type", "message");
+  object.Set("data", value);
+  channel.MakeCallback("dispatchEvent", { object });
+}
+
+void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuffer* rawBuffer) {
+  std::unique_ptr<webrtc::DataBuffer> buffer(rawBuffer);
+
+  bool binary = buffer->binary;
+  size_t size = buffer->size();
+
+  auto env = channel.Env();
+  Napi::HandleScope scope(env);
+  Napi::Value value;
+
+  if (binary) {
+    auto* ownedBuffer = buffer.release();
+    auto array = Napi::ArrayBuffer::New(
+      env,
+      const_cast<uint8_t*>(ownedBuffer->data.data()),
+      size,
+      [](Napi::Env, void*, webrtc::DataBuffer* ownedMessage) {
+        delete ownedMessage;
+      },
+      ownedBuffer);
+    value = array;  // NOLINT
+  } else {
+    auto str = Napi::String::New(
+      env,
+      reinterpret_cast<const char*>(buffer->data.data()),
+      size);  // NOLINT
+    value = str;
+  }
+
   auto object = Napi::Object::New(env);
   object.Set("type", "message");
   object.Set("data", value);

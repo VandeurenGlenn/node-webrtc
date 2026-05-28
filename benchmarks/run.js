@@ -90,6 +90,7 @@ function parseArgs(argv) {
   const options = {
     iterations: 25,
     warmup: 5,
+    compareRuns: 1,
     messages: 100,
     binaryPayloadBytes: 1024,
     output: "",
@@ -116,6 +117,12 @@ function parseArgs(argv) {
 
     if (arg === "--messages" && next) {
       options.messages = Number.parseInt(next, 10);
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--compare-runs" && next) {
+      options.compareRuns = Number.parseInt(next, 10);
       i += 1;
       continue;
     }
@@ -191,6 +198,30 @@ function summarize(samples) {
     stddev: round(stdDev(samples, avg), 3),
     samples: samples.map((sample) => round(sample, 3)),
   };
+}
+
+function median(values) {
+  return percentile(values, 50);
+}
+
+function aggregateScenarioResults(resultsPerRun) {
+  const scenarioNames = Object.keys(resultsPerRun[0]);
+  const aggregated = {};
+
+  scenarioNames.forEach((name) => {
+    const values = resultsPerRun.map((result) => result[name]);
+    aggregated[name] = {
+      min: round(median(values.map((value) => value.min)), 3),
+      max: round(median(values.map((value) => value.max)), 3),
+      mean: round(median(values.map((value) => value.mean)), 3),
+      median: round(median(values.map((value) => value.median)), 3),
+      p95: round(median(values.map((value) => value.p95)), 3),
+      stddev: round(median(values.map((value) => value.stddev)), 3),
+      runs: values.length,
+    };
+  });
+
+  return aggregated;
 }
 
 function waitForChannelOpen(channel) {
@@ -486,6 +517,13 @@ function printResult(result) {
       result.meta.warmup +
       ")",
   );
+  if (result.meta.compareRuns > 1) {
+    console.log(
+      "Compare runs: " +
+        result.meta.compareRuns +
+        " (scenario stats are median-aggregated)",
+    );
+  }
   console.log("");
 
   Object.keys(result.scenarios).forEach((name) => {
@@ -559,6 +597,9 @@ async function run() {
   if (!Number.isFinite(options.messages) || options.messages <= 0) {
     throw new Error("--messages must be > 0");
   }
+  if (!Number.isFinite(options.compareRuns) || options.compareRuns <= 0) {
+    throw new Error("--compare-runs must be > 0");
+  }
   if (
     !Number.isFinite(options.binaryPayloadBytes) ||
     options.binaryPayloadBytes <= 0
@@ -585,23 +626,33 @@ async function run() {
     },
   ];
 
-  const scenarioResults = {};
+  const allRunResults = [];
+  for (let runIndex = 0; runIndex < options.compareRuns; runIndex += 1) {
+    const scenarioResults = {};
 
-  for (let s = 0; s < scenarios.length; s += 1) {
-    const scenario = scenarios[s];
+    for (let s = 0; s < scenarios.length; s += 1) {
+      const scenario = scenarios[s];
 
-    for (let warmup = 0; warmup < options.warmup; warmup += 1) {
-      await scenario.run();
+      for (let warmup = 0; warmup < options.warmup; warmup += 1) {
+        await scenario.run();
+      }
+
+      const samples = [];
+      for (let i = 0; i < options.iterations; i += 1) {
+        const sample = await scenario.run();
+        samples.push(sample);
+      }
+
+      scenarioResults[scenario.name] = summarize(samples);
     }
 
-    const samples = [];
-    for (let i = 0; i < options.iterations; i += 1) {
-      const sample = await scenario.run();
-      samples.push(sample);
-    }
-
-    scenarioResults[scenario.name] = summarize(samples);
+    allRunResults.push(scenarioResults);
   }
+
+  const scenarioResults =
+    options.compareRuns === 1
+      ? allRunResults[0]
+      : aggregateScenarioResults(allRunResults);
 
   const now = new Date();
   const defaultOutput = path.join(
@@ -626,6 +677,7 @@ async function run() {
       commit: getGitCommit(),
       iterations: options.iterations,
       warmup: options.warmup,
+      compareRuns: options.compareRuns,
       messagesPerIteration: options.messages,
       binaryPayloadBytes: options.binaryPayloadBytes,
     },

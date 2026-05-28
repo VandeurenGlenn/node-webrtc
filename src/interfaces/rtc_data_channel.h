@@ -57,6 +57,7 @@ class RTCDataChannel
 
   static void HandleStateChange(RTCDataChannel&, webrtc::DataChannelInterface::DataState);
   static void HandleMessage(RTCDataChannel&, const webrtc::DataBuffer& buffer);
+  static void HandleOwnedMessage(RTCDataChannel&, webrtc::DataBuffer* buffer);
 
   Napi::Value Send(const Napi::CallbackInfo&);
   Napi::Value Close(const Napi::CallbackInfo&);

@@ -11,7 +11,9 @@ import RTCPeerConnectionIceErrorEvent from "./rtcpeerconnectioniceerrorevent.js"
 import RTCSessionDescription from "./sessiondescription.js";
 
 function getCachedSessionDescription(self, key, description) {
-  const cache = self._sessionDescriptionCache;
+  const cache =
+    self._sessionDescriptionCache ||
+    (self._sessionDescriptionCache = Object.create(null));
   if (!description) {
     cache[key] = null;
     return null;
@@ -259,9 +261,6 @@ function RTCPeerConnection() {
 
   Object.defineProperty(this, "_pc", {
     value: pc,
-  });
-  Object.defineProperty(this, "_sessionDescriptionCache", {
-    value: Object.create(null),
   });
   Object.defineProperties(this, PEER_CONNECTION_DESCRIPTORS);
 }

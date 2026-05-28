@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /* eslint no-process-env:0, no-process-exit:0 */
-'use strict';
 
-const { spawnSync } = require('child_process');
+import { spawnSync } from "child_process";
+import { fileURLToPath } from "url";
 
 function main(exit) {
-  const args = ['install'];
+  const args = ["install"];
 
   if (process.env.DEBUG) {
-    args.push('--debug');
+    args.push("--debug");
   }
 
   if (process.env.TARGET_ARCH) {
-    args.push('--target_arch=' + process.env.TARGET_ARCH);
+    args.push("--target_arch=" + process.env.TARGET_ARCH);
   }
 
-  let { status } = spawnSync('node-pre-gyp', args, {
+  let { status } = spawnSync("node-pre-gyp", args, {
     shell: true,
-    stdio: 'inherit'
+    stdio: "inherit",
   });
   if (status) {
     if (!exit) {
@@ -28,8 +28,8 @@ function main(exit) {
   }
 }
 
-module.exports = main;
+export default main;
 
-if (require.main === module) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   main(true);
 }
