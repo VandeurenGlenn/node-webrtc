@@ -412,42 +412,51 @@ function(nodejs_init)
     # a module from one platform to another (should happen automatically
     # with most generators)
     if(WIN32)
+        # Newer Node.js releases may not ship both win-x86 and win-x64 stubs.
+        # Only require the checksum/library for the active target architecture.
+        set(NODEJS_TARGET_64BIT FALSE)
+        if(CMAKE_SIZEOF_VOID_P EQUAL 8 OR CMAKE_CL_64)
+            set(NODEJS_TARGET_64BIT TRUE)
+        endif()
+
         # Download the win32 library for linking
         file(STRINGS
             ${ROOT}/CHECKSUM LIB32_CHECKSUM
             LIMIT_COUNT 1
             REGEX ${LIB32_MATCH}
         )
-        if(NOT LIB32_CHECKSUM)
+        if(NOT LIB32_CHECKSUM AND NOT NODEJS_TARGET_64BIT)
             message(FATAL_ERROR "Unable to extract x86 library checksum")
         endif()
-        string(REGEX MATCH ${LIB32_MATCH} LIB32_CHECKSUM ${LIB32_CHECKSUM})
-        set(LIB32_CHECKSUM ${CMAKE_MATCH_1})
-        set(LIB32_PATH     win-x86)
-        set(LIB32_NAME     ${CMAKE_MATCH_4}${CMAKE_MATCH_5})
-        set(LIB32_TARGET   ${CMAKE_MATCH_2}${CMAKE_MATCH_3}${LIB32_NAME})
-        if(NOT EXISTS ${ROOT}/${LIB32_PATH})
-            file(REMOVE_RECURSE ${TEMP}/${LIB32_PATH})
-            download_file(
-               ${URL}/${VERSION}/${LIB32_TARGET}
-               ${TEMP}/${LIB32_PATH}/${LIB32_NAME}
-               INACTIVITY_TIMEOUT 10
-               EXPECTED_HASH ${CHECKTYPE}=${LIB32_CHECKSUM}
-               STATUS LIB32_STATUS
-            )
-            list(GET LIB32_STATUS 0 LIB32_STATUS)
-            if(LIB32_STATUS GREATER 0)
-                message(FATAL_ERROR
-                    "Unable to download Node.js windows library (32-bit)"
+        if(LIB32_CHECKSUM)
+            string(REGEX MATCH ${LIB32_MATCH} LIB32_CHECKSUM ${LIB32_CHECKSUM})
+            set(LIB32_CHECKSUM ${CMAKE_MATCH_1})
+            set(LIB32_PATH     win-x86)
+            set(LIB32_NAME     ${CMAKE_MATCH_4}${CMAKE_MATCH_5})
+            set(LIB32_TARGET   ${CMAKE_MATCH_2}${CMAKE_MATCH_3}${LIB32_NAME})
+            if(NOT EXISTS ${ROOT}/${LIB32_PATH})
+                file(REMOVE_RECURSE ${TEMP}/${LIB32_PATH})
+                download_file(
+                   ${URL}/${VERSION}/${LIB32_TARGET}
+                   ${TEMP}/${LIB32_PATH}/${LIB32_NAME}
+                   INACTIVITY_TIMEOUT 10
+                   EXPECTED_HASH ${CHECKTYPE}=${LIB32_CHECKSUM}
+                   STATUS LIB32_STATUS
                 )
+                list(GET LIB32_STATUS 0 LIB32_STATUS)
+                if(LIB32_STATUS GREATER 0)
+                    message(FATAL_ERROR
+                        "Unable to download Node.js windows library (32-bit)"
+                    )
+                endif()
+                file(REMOVE_RECURSE ${ROOT}/${LIB32_PATH})
+                file(MAKE_DIRECTORY ${ROOT}/${LIB32_PATH})
+                file(RENAME
+                    ${TEMP}/${LIB32_PATH}/${LIB32_NAME}
+                    ${ROOT}/${LIB32_PATH}/${LIB32_NAME}
+                )
+                file(REMOVE_RECURSE ${TEMP}/${LIB32_PATH})
             endif()
-            file(REMOVE_RECURSE ${ROOT}/${LIB32_PATH})
-            file(MAKE_DIRECTORY ${ROOT}/${LIB32_PATH})
-            file(RENAME
-                ${TEMP}/${LIB32_PATH}/${LIB32_NAME}
-                ${ROOT}/${LIB32_PATH}/${LIB32_NAME}
-            )
-            file(REMOVE_RECURSE ${TEMP}/${LIB32_PATH})
         endif()
 
         # Download the win64 library for linking
@@ -456,36 +465,38 @@ function(nodejs_init)
             LIMIT_COUNT 1
             REGEX ${LIB64_MATCH}
         )
-        if(NOT LIB64_CHECKSUM)
+        if(NOT LIB64_CHECKSUM AND NODEJS_TARGET_64BIT)
             message(FATAL_ERROR "Unable to extract x64 library checksum")
         endif()
-        string(REGEX MATCH ${LIB64_MATCH} LIB64_CHECKSUM ${LIB64_CHECKSUM})
-        set(LIB64_CHECKSUM ${CMAKE_MATCH_1})
-        set(LIB64_PATH     win-x64)
-        set(LIB64_NAME     ${CMAKE_MATCH_4}${CMAKE_MATCH_5})
-        set(LIB64_TARGET   ${CMAKE_MATCH_2}${CMAKE_MATCH_3}${LIB64_NAME})
-        if(NOT EXISTS ${ROOT}/${LIB64_PATH})
-            file(REMOVE_RECURSE ${TEMP}/${LIB64_PATH})
-            download_file(
-               ${URL}/${VERSION}/${LIB64_TARGET}
-               ${TEMP}/${LIB64_PATH}/${LIB64_NAME}
-               INACTIVITY_TIMEOUT 10
-               EXPECTED_HASH ${CHECKTYPE}=${LIB64_CHECKSUM}
-               STATUS LIB64_STATUS
-            )
-            list(GET LIB64_STATUS 0 LIB64_STATUS)
-            if(LIB64_STATUS GREATER 0)
-                message(FATAL_ERROR
-                    "Unable to download Node.js windows library (64-bit)"
+        if(LIB64_CHECKSUM)
+            string(REGEX MATCH ${LIB64_MATCH} LIB64_CHECKSUM ${LIB64_CHECKSUM})
+            set(LIB64_CHECKSUM ${CMAKE_MATCH_1})
+            set(LIB64_PATH     win-x64)
+            set(LIB64_NAME     ${CMAKE_MATCH_4}${CMAKE_MATCH_5})
+            set(LIB64_TARGET   ${CMAKE_MATCH_2}${CMAKE_MATCH_3}${LIB64_NAME})
+            if(NOT EXISTS ${ROOT}/${LIB64_PATH})
+                file(REMOVE_RECURSE ${TEMP}/${LIB64_PATH})
+                download_file(
+                   ${URL}/${VERSION}/${LIB64_TARGET}
+                   ${TEMP}/${LIB64_PATH}/${LIB64_NAME}
+                   INACTIVITY_TIMEOUT 10
+                   EXPECTED_HASH ${CHECKTYPE}=${LIB64_CHECKSUM}
+                   STATUS LIB64_STATUS
                 )
+                list(GET LIB64_STATUS 0 LIB64_STATUS)
+                if(LIB64_STATUS GREATER 0)
+                    message(FATAL_ERROR
+                        "Unable to download Node.js windows library (64-bit)"
+                    )
+                endif()
+                file(REMOVE_RECURSE ${ROOT}/${LIB64_PATH})
+                file(MAKE_DIRECTORY ${ROOT}/${LIB64_PATH})
+                file(RENAME
+                    ${TEMP}/${LIB64_PATH}/${LIB64_NAME}
+                    ${ROOT}/${LIB64_PATH}/${LIB64_NAME}
+                )
+                file(REMOVE_RECURSE ${TEMP}/${LIB64_PATH})
             endif()
-            file(REMOVE_RECURSE ${ROOT}/${LIB64_PATH})
-            file(MAKE_DIRECTORY ${ROOT}/${LIB64_PATH})
-            file(RENAME
-                ${TEMP}/${LIB64_PATH}/${LIB64_NAME}
-                ${ROOT}/${LIB64_PATH}/${LIB64_NAME}
-            )
-            file(REMOVE_RECURSE ${TEMP}/${LIB64_PATH})
         endif()
     endif()
 
