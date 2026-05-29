@@ -16,7 +16,7 @@ jobs:
       matrix:
         # windows-2019 is required for node-webrtc native builds because libwebrtc/Chromium only supports Visual Studio 2019/2017 toolchains.
         # windows-latest and windows-2022 only have VS2022, which is not recognized by upstream build scripts as of 2026.
-        os: [ubuntu-latest, windows-2019]
+        os: [ubuntu-latest, windows-2022]
         node: [26]
 
     steps:
