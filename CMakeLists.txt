@@ -26,13 +26,7 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ""
   BUILD_COMMAND     ""
   INSTALL_COMMAND   ""
-  # Patch base64.h and base64.cc to add missing #include <cstdint> for uint8_t
-  PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching WebRTC base64.h and base64.cc for uint8_t include..." && \
-    ${CMAKE_COMMAND} -E copy_if_different <SOURCE_DIR>/rtc_base/third_party/base64/base64.h <SOURCE_DIR>/rtc_base/third_party/base64/base64.h.bak && \
-    ${CMAKE_COMMAND} -E copy_if_different <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc.bak && \
-    ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Inserting #include <cstdint> into base64.h and base64.cc" && \
-    ${CMAKE_COMMAND} -E sh -c "awk 'NR==1{print "#include <cstdint>"} 1' <SOURCE_DIR>/rtc_base/third_party/base64/base64.h.bak > <SOURCE_DIR>/rtc_base/third_party/base64/base64.h" && \
-    ${CMAKE_COMMAND} -E sh -c "awk 'NR==1{print "#include <cstdint>"} 1' <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc.bak > <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc"
+)
 )
 
 ExternalProject_Get_Property(project_depot_tools SOURCE_DIR)
@@ -269,6 +263,7 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${webrtc_build_env} BINARY_DIR=<BINARY_DIR> DEPOT_TOOLS=${depot_tools_install_dir} GN_GEN_ARGS=${GN_GEN_ARGS} SOURCE_DIR=<SOURCE_DIR> ${CMAKE_SOURCE_DIR}/scripts/configure-webrtc.${suffix}
   BUILD_COMMAND     ${CMAKE_COMMAND} -E env ${webrtc_build_env} CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} DEPOT_TOOLS=${depot_tools_install_dir} ${CMAKE_SOURCE_DIR}/scripts/build-webrtc.${suffix}
   INSTALL_COMMAND   ""
+  PATCH_COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_SOURCE_DIR}/scripts/patch-webrtc-base64.sh <SOURCE_DIR>
 )
 
 add_dependencies(project_libwebrtc project_depot_tools)

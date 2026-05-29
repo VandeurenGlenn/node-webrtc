@@ -7,6 +7,15 @@
 
 node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M87](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4280). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
 
+
+⚠️ **Windows CI Notice (2026):**
+
+Native builds of node-webrtc on Windows require Visual Studio 2019 or 2017 due to upstream libwebrtc/Chromium toolchain limitations. GitHub Actions and most CI providers now only offer Visual Studio 2022 (windows-latest, windows-2022), which is not recognized by the upstream build scripts. Until Chromium/libwebrtc adds VS2022 support, Windows native builds may fail in CI. Track upstream for updates.
+
+Prebuilt binaries for Windows are still published and supported.
+
+---
+
 Install
 -------
 

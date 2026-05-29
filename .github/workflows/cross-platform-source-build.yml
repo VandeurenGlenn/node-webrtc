@@ -10,6 +10,7 @@ jobs:
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-2019' || matrix.os == 'windows-latest' || matrix.os == 'windows-2022' }}
     strategy:
       fail-fast: false
       matrix:
