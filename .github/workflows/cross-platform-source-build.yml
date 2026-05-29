@@ -42,8 +42,6 @@ jobs:
         env:
           SKIP_DOWNLOAD: true
           CMAKE_GENERATOR: Ninja
-          LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
-          LIBRARY_PATH: /usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
         run: npm install
 
       - name: Build from source (Windows)

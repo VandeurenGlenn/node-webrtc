@@ -26,11 +26,23 @@ if (generatorArg) {
   args.push(generatorArg);
 }
 
+const buildEnv = { ...process.env };
+if (process.platform === "linux") {
+  const disableAvailability = "-D_LIBCPP_DISABLE_AVAILABILITY";
+  const cxxflags = buildEnv.CXXFLAGS || "";
+  if (!cxxflags.includes(disableAvailability)) {
+    buildEnv.CXXFLAGS = cxxflags
+      ? cxxflags + " " + disableAvailability
+      : disableAvailability;
+  }
+}
+
 function main() {
   console.log("Running ncmake " + args.join(" "));
   let { status } = spawnSync("ncmake", args, {
     shell: true,
     stdio: "inherit",
+    env: buildEnv,
   });
   if (status) {
     throw new Error("ncmake configure failed for wrtc");
@@ -40,6 +52,7 @@ function main() {
   status = spawnSync("ncmake", ["build"], {
     shell: true,
     stdio: "inherit",
+    env: buildEnv,
   }).status;
   if (status) {
     throw new Error("ncmake build failed for wrtc");
