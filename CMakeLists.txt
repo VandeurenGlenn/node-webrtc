@@ -26,6 +26,13 @@ ExternalProject_Add(
   CONFIGURE_COMMAND ""
   BUILD_COMMAND     ""
   INSTALL_COMMAND   ""
+  # Patch base64.h and base64.cc to add missing #include <cstdint> for uint8_t
+  PATCH_COMMAND ${CMAKE_COMMAND} -E echo "Patching WebRTC base64.h and base64.cc for uint8_t include..." && \
+    ${CMAKE_COMMAND} -E copy_if_different <SOURCE_DIR>/rtc_base/third_party/base64/base64.h <SOURCE_DIR>/rtc_base/third_party/base64/base64.h.bak && \
+    ${CMAKE_COMMAND} -E copy_if_different <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc.bak && \
+    ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Inserting #include <cstdint> into base64.h and base64.cc" && \
+    ${CMAKE_COMMAND} -E sh -c "awk 'NR==1{print "#include <cstdint>"} 1' <SOURCE_DIR>/rtc_base/third_party/base64/base64.h.bak > <SOURCE_DIR>/rtc_base/third_party/base64/base64.h" && \
+    ${CMAKE_COMMAND} -E sh -c "awk 'NR==1{print "#include <cstdint>"} 1' <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc.bak > <SOURCE_DIR>/rtc_base/third_party/base64/base64.cc"
 )
 
 ExternalProject_Get_Property(project_depot_tools SOURCE_DIR)
