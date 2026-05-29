@@ -27,7 +27,6 @@ ExternalProject_Add(
   BUILD_COMMAND     ""
   INSTALL_COMMAND   ""
 )
-)
 
 ExternalProject_Get_Property(project_depot_tools SOURCE_DIR)
 set(depot_tools_install_dir ${SOURCE_DIR})
