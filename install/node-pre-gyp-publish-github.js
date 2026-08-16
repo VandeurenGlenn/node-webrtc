@@ -54,7 +54,7 @@ class NodePreGypGithub {
             'owner': this.owner,
             'repo': this.repo,
             'tag_name': this.package_json.version,
-            'target_commitish': 'develop',
+            'target_commitish': process.env.NODE_PRE_GYP_GITHUB_TARGET || 'develop',
             'name': 'v' + this.package_json.version,
             'body': this.package_json.name + ' ' + this.package_json.version,
             'draft': true,
