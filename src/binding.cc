@@ -37,7 +37,6 @@
 #endif
 
 static void dispose(void*) {
-  node_webrtc::AsyncContextReleaser::Shutdown();
   node_webrtc::PeerConnectionFactory::Dispose();
 }
 

@@ -46,9 +46,7 @@ test('getConfiguration', function(t) {
     ['iceTransportPolicy', 'relay'],
     ['bundlePolicy', 'max-bundle'],
     ['rtcpMuxPolicy', 'negotiate'],
-    // A maximal pool allocates hundreds of ICE sessions and can make this
-    // configuration round-trip test hang on resource-constrained runners.
-    ['iceCandidatePoolSize', 2],
+    ['iceCandidatePoolSize', 255],
     ['portRange', { min: 1, max: 2 }]
   ].forEach(function(pair) {
     t.test('after setting ' + pair[0], function(t) {

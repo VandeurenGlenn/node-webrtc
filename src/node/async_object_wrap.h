@@ -18,10 +18,7 @@ class AsyncObjectWrap: public Napi::ObjectWrap<T> {
   void DestroyAsyncContext() {
     _async_context_mutex.lock();
     if (_async_context) {
-      auto releaser = AsyncContextReleaser::GetDefault();
-      if (releaser) {
-        releaser->Release(_async_context);
-      }
+      AsyncContextReleaser::GetDefault()->Release(_async_context);
       _async_context = nullptr;
     }
     _async_context_mutex.unlock();

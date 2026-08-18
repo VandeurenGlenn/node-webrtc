@@ -4,10 +4,8 @@ import { spawnSync } from "child_process";
 import { readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
 import { join } from "path";
-import { fileURLToPath } from "url";
 
 const require = createRequire(import.meta.url);
-const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const copy = require("recursive-copy");
 const temp = require("temp");
 const rootPackageJson = require("../package.json");
@@ -15,8 +13,7 @@ const rootPackageJson = require("../package.json");
 temp.track();
 
 const githubUrl =
-  "https://github.com/VandeurenGlenn/node-webrtc/blob/v" +
-  rootPackageJson.version;
+  "https://github.com/node-webrtc/node-webrtc/blob/v" + rootPackageJson.version;
 
 const paths = [
   "lib",
@@ -30,7 +27,6 @@ const jsonFields = [
   "name",
   "description",
   "keywords",
-  "type",
   "version",
   "author",
   "homepage",
@@ -41,7 +37,6 @@ const jsonFields = [
   "browser",
   "binary",
   "engines",
-  "dependencies",
   "optionalDependencies",
   "bundledDependencies",
 ];
@@ -94,11 +89,7 @@ async function main() {
 
   writeFileSync(join(tmpDir, "README.md"), readme);
 
-  const publishArgs = ["publish", "--access", "public"];
-  if (process.argv.includes("--dry-run")) {
-    publishArgs.push("--dry-run");
-  }
-  const { status } = spawnSync("npm", publishArgs, {
+  const { status } = spawnSync("npm", ["publish"], {
     shell: true,
     stdio: "inherit",
     cwd: tmpDir,
