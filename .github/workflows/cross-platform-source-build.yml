@@ -32,7 +32,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build
+          sudo apt-get install -y ninja-build libglib2.0-dev
 
       - name: Install ninja (Windows)
         if: runner.os == 'Windows'
