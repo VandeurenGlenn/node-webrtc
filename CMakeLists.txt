@@ -175,6 +175,7 @@ if (UNIX AND NOT APPLE)
   list(APPEND GN_GEN_ARGS
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
+    use_sysroot=false
   )
 endif()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -555,7 +556,6 @@ else()
     else()
       target_compile_options(${MODULE} PRIVATE
         -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
-        --sysroot=${libwebrtc_source_dir}/src/build/linux/debian_sid_amd64-sysroot
       )
     endif()
   endif()
