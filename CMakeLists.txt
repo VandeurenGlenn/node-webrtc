@@ -176,6 +176,8 @@ if (UNIX AND NOT APPLE)
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     use_sysroot=false
+    treat_warnings_as_errors=false
+    fatal_linker_warnings=false
   )
 endif()
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
