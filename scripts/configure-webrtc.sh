@@ -4,6 +4,8 @@ set -e
 
 set -v
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export PYTHONPATH="$SCRIPT_DIR/python-compat${PYTHONPATH:+:$PYTHONPATH}"
 export PATH=$DEPOT_TOOLS:$PATH
 
 PYTHON_BIN=python
