@@ -4,6 +4,8 @@ set -e
 
 set -v
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export PYTHONPATH="$SCRIPT_DIR/python-compat${PYTHONPATH:+:$PYTHONPATH}"
 export PATH=$DEPOT_TOOLS:$PATH
 
 gclient config --unmanaged --spec 'solutions=[{"name":"src","url":"https://webrtc.googlesource.com/src.git"}]'
