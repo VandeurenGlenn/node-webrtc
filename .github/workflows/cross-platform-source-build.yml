@@ -10,21 +10,18 @@ jobs:
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-2019' || matrix.os == 'windows-latest' || matrix.os == 'windows-2022' }}
     strategy:
       fail-fast: false
       matrix:
-        # windows-2019 is required for node-webrtc native builds because libwebrtc/Chromium only supports Visual Studio 2019/2017 toolchains.
-        # windows-latest and windows-2022 only have VS2022, which is not recognized by upstream build scripts as of 2026.
-        os: [ubuntu-latest, windows-2022]
+        os: [ubuntu-latest]
         node: [26]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 
@@ -35,22 +32,8 @@ jobs:
           sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev gcc-12 g++-12
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 120 --slave /usr/bin/g++ g++ /usr/bin/g++-12
           sudo update-alternatives --set gcc /usr/bin/gcc-12
-
-      - name: Install ninja (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          choco install ninja -y --no-progress
-
       - name: Build from source (Linux)
         if: runner.os == 'Linux'
-        env:
-          SKIP_DOWNLOAD: true
-          CMAKE_GENERATOR: Ninja
-        run: npm install
-
-      - name: Build from source (Windows)
-        if: runner.os == 'Windows'
         env:
           SKIP_DOWNLOAD: true
           CMAKE_GENERATOR: Ninja
