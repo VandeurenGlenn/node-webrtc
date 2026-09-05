@@ -27,5 +27,4 @@ fi
 # takes too long in CI; so do this manually.
 (cd build/util && "$PYTHON_BIN" lastchange.py -o LASTCHANGE)
 
-
 gn gen ${BINARY_DIR} "--args=${GN_GEN_ARGS}"
