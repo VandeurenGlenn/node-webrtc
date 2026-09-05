@@ -59,3 +59,20 @@ jobs:
 
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
+
+      - name: Package Linux addon
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          version=$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")
+          test -s build/Release/wrtc.node
+          mkdir -p artifacts
+          tar -czf "artifacts/wrtc-v${version}-napi-v3-linux-x64.tar.gz" -C build/Release wrtc.node
+
+      - name: Preserve tested Linux addon
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrtc-linux-x64
+          path: artifacts/*.tar.gz
+          if-no-files-found: error
