@@ -44,6 +44,23 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Locate Visual Studio 2022
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere `
+            -latest `
+            -version '[17.0,18.0)' `
+            -products '*' `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+            -property installationPath
+          if (-not $installPath) {
+            throw 'Visual Studio 2022 with C++ build tools was not found'
+          }
+          "vs2022_install=$installPath" >> $env:GITHUB_ENV
+          Write-Host "Using Visual Studio from $installPath"
+
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
