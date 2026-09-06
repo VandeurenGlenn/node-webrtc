@@ -19,6 +19,7 @@ concurrency:
 jobs:
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -101,20 +102,60 @@ jobs:
   release:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: source-build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Download tested native addons
-        uses: actions/download-artifact@v8
-        with:
-          pattern: wrtc-*
-          path: release-assets
-          merge-multiple: true
+      - name: Download exact-tree PR artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag_tree="$(git rev-parse 'HEAD^{tree}')"
+          build_run_id=""
+
+          while IFS=$'\t' read -r run_id head_sha; do
+            candidate_tree="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
+                --jq '.tree.sha' 2>/dev/null || true
+            )"
+            if [ "$candidate_tree" != "$tag_tree" ]; then
+              continue
+            fi
+
+            artifact_count="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+                --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
+            )"
+            if [ "$artifact_count" -eq 3 ]; then
+              build_run_id="$run_id"
+              break
+            fi
+          done < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow cross-platform-source-build.yml \
+              --event pull_request \
+              --status success \
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
+          )
+
+          if [ -z "$build_run_id" ]; then
+            echo "No successful PR build with three live artifacts matches tree $tag_tree" >&2
+            exit 1
+          fi
+
+          echo "Promoting artifacts from PR workflow run $build_run_id"
+          gh run download "$build_run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'wrtc-*' \
+            --dir release-assets
 
       - name: Validate release inputs
         shell: bash
