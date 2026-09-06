@@ -19,7 +19,7 @@ if [ -z "$NINJA_BIN" ]; then
   exit 1
 fi
 
-export TARGETS="webrtc"
+export TARGETS="webrtc api/video:adapted_video_track_source"
 
 if [ -z "$PARALLELISM" ]; then
   "$NINJA_BIN" $TARGETS

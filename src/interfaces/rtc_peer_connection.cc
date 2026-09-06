@@ -10,6 +10,7 @@
 #include <iosfwd>
 
 #include <webrtc/api/media_types.h>
+#include <webrtc/api/environment/environment_factory.h>
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/api/rtc_error.h>
 #include <webrtc/api/rtp_transceiver_interface.h>
@@ -82,7 +83,8 @@ RTCPeerConnection::RTCPeerConnection(const Napi::CallbackInfo& info)
   _factory = PeerConnectionFactory::GetOrCreateDefault();
   _shouldReleaseFactory = true;
 
-  auto portAllocator = std::unique_ptr<cricket::PortAllocator>(new cricket::BasicPortAllocator(
+  auto portAllocator = std::unique_ptr<webrtc::PortAllocator>(new webrtc::BasicPortAllocator(
+              webrtc::CreateEnvironment(),
               _factory->getNetworkManager(),
               _factory->getSocketFactory()));
   _port_range = configuration.portRange;
@@ -90,11 +92,15 @@ RTCPeerConnection::RTCPeerConnection(const Napi::CallbackInfo& info)
       _port_range.min.FromMaybe(0),
       _port_range.max.FromMaybe(65535));
 
-  _jinglePeerConnection = _factory->factory()->CreatePeerConnection(
-          configuration.configuration,
-          std::move(portAllocator),
-          nullptr,
-          this);
+  webrtc::PeerConnectionDependencies dependencies(this);
+  dependencies.allocator = std::move(portAllocator);
+  auto result = _factory->factory()->CreatePeerConnectionOrError(
+      configuration.configuration, std::move(dependencies));
+  if (!result.ok()) {
+    Napi::Error::New(env, result.error().message()).ThrowAsJavaScriptException();
+    return;
+  }
+  _jinglePeerConnection = result.MoveValue();
 }
 
 RTCPeerConnection::~RTCPeerConnection() {
@@ -285,8 +291,8 @@ Napi::Value RTCPeerConnection::AddTransceiver(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "AddTransceiver is only available with Unified Plan SdpSemanticsAbort").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  CONVERT_ARGS_OR_THROW_AND_RETURN_NAPI(info, args, std::tuple<Either<cricket::MediaType COMMA MediaStreamTrack*> COMMA Maybe<webrtc::RtpTransceiverInit>>)
-  Either<cricket::MediaType, MediaStreamTrack*> kindOrTrack = std::get<0>(args);
+  CONVERT_ARGS_OR_THROW_AND_RETURN_NAPI(info, args, std::tuple<Either<webrtc::MediaType COMMA MediaStreamTrack*> COMMA Maybe<webrtc::RtpTransceiverInit>>)
+  Either<webrtc::MediaType, MediaStreamTrack*> kindOrTrack = std::get<0>(args);
   Maybe<webrtc::RtpTransceiverInit> maybeInit = std::get<1>(args);
   auto result = kindOrTrack.IsLeft()
       ? maybeInit.IsNothing()
@@ -316,7 +322,7 @@ Napi::Value RTCPeerConnection::RemoveTrack(const Napi::CallbackInfo& info) {
     Napi::Error(env, ErrorFactory::CreateInvalidAccessError(env, "Cannot removeTrack")).ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  if (!_jinglePeerConnection->RemoveTrack(sender->sender())) {
+  if (!_jinglePeerConnection->RemoveTrackOrError(sender->sender()).ok()) {
     Napi::Error(env, ErrorFactory::CreateInvalidAccessError(env, "Cannot removeTrack")).ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -462,13 +468,12 @@ Napi::Value RTCPeerConnection::CreateDataChannel(const Napi::CallbackInfo& info)
   auto label = std::get<0>(args);
   auto dataChannelInit = std::get<1>(args).FromMaybe(webrtc::DataChannelInit());
 
-  rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel_interface =
-      _jinglePeerConnection->CreateDataChannel(label, &dataChannelInit);
-
-  if (!data_channel_interface) {
+  auto result = _jinglePeerConnection->CreateDataChannelOrError(label, &dataChannelInit);
+  if (!result.ok()) {
     Napi::Error(env, ErrorFactory::CreateInvalidStateError(env, "'createDataChannel' failed")).ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  auto data_channel_interface = result.MoveValue();
 
   auto observer = new DataChannelObserver(_factory, data_channel_interface);
   auto channel = RTCDataChannel::wrap()->GetOrCreate(observer, observer->channel());
@@ -549,8 +554,16 @@ Napi::Value RTCPeerConnection::LegacyGetStats(const Napi::CallbackInfo& info) {
   auto env = info.Env();
 
   CREATE_DEFERRED(env, deferred)
-  Reject(deferred, Napi::Error::New(env, "Legacy getStats is not supported by WebRTC 7977; use promise-based getStats()"));
-  return deferred.Promise();
+
+  if (!_jinglePeerConnection) {
+    Reject(deferred, ErrorFactory::CreateError(env, "RTCPeerConnection is closed"));
+    return deferred.Promise();
+  }
+
+  auto callback = new rtc::RefCountedObject<LegacyRTCStatsCollector>(this, deferred);
+  _jinglePeerConnection->GetStats(callback);
+
+  return deferred.Promise();  // NOLINT
 }
 
 Napi::Value RTCPeerConnection::GetTransceivers(const Napi::CallbackInfo& info) {

@@ -42,10 +42,12 @@ MediaStream::Impl::Impl(std::vector<MediaStreamTrack*>&& tracks, PeerConnectionF
   for (auto const& track : tracks) {
     if (track->track()->kind() == track->track()->kAudioKind) {
       auto audioTrack = static_cast<webrtc::AudioTrackInterface*>(track->track().get());
-      _stream->AddTrack(audioTrack);
+      rtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrackRef(audioTrack);
+      _stream->AddTrack(audioTrackRef);
     } else {
       auto videoTrack = static_cast<webrtc::VideoTrackInterface*>(track->track().get());
-      _stream->AddTrack(videoTrack);
+      rtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrackRef(videoTrack);
+      _stream->AddTrack(videoTrackRef);
     }
   }
 }
@@ -210,9 +212,11 @@ Napi::Value MediaStream::AddTrack(const Napi::CallbackInfo& info) {
   auto stream = _impl._stream;
   auto track = mediaStreamTrack->track();
   if (track->kind() == track->kAudioKind) {
-    stream->AddTrack(static_cast<webrtc::AudioTrackInterface*>(track.get()));
+    stream->AddTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(
+        static_cast<webrtc::AudioTrackInterface*>(track.get())));
   } else {
-    stream->AddTrack(static_cast<webrtc::VideoTrackInterface*>(track.get()));
+    stream->AddTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(
+        static_cast<webrtc::VideoTrackInterface*>(track.get())));
   }
   return info.Env().Undefined();
 }
@@ -222,9 +226,11 @@ Napi::Value MediaStream::RemoveTrack(const Napi::CallbackInfo& info) {
   auto stream = _impl._stream;
   auto track = mediaStreamTrack->track();
   if (track->kind() == track->kAudioKind) {
-    stream->RemoveTrack(static_cast<webrtc::AudioTrackInterface*>(track.get()));
+    stream->RemoveTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(
+        static_cast<webrtc::AudioTrackInterface*>(track.get())));
   } else {
-    stream->RemoveTrack(static_cast<webrtc::VideoTrackInterface*>(track.get()));
+    stream->RemoveTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(
+        static_cast<webrtc::VideoTrackInterface*>(track.get())));
   }
   return info.Env().Undefined();
 }
@@ -240,7 +246,8 @@ Napi::Value MediaStream::Clone(const Napi::CallbackInfo& info) {
     } else {
       auto videoTrack = static_cast<webrtc::VideoTrackInterface*>(track.get());
       auto source = videoTrack->GetSource();
-      auto clonedTrack = _impl._factory->factory()->CreateVideoTrack(rtc::CreateRandomUuid(), source);
+      rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> sourceRef(source);
+      auto clonedTrack = _impl._factory->factory()->CreateVideoTrack(sourceRef, rtc::CreateRandomUuid());
       clonedStream->AddTrack(clonedTrack);
     }
   }

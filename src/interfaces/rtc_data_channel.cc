@@ -106,8 +106,8 @@ void RTCDataChannel::CleanupInternals() {
   _jingleDataChannel->UnregisterObserver();
   _cached_id = _jingleDataChannel->id();
   _cached_label = _jingleDataChannel->label();
-  _cached_max_packet_life_time = _jingleDataChannel->maxRetransmitTime();
-  _cached_max_retransmits = _jingleDataChannel->maxRetransmits();
+  _cached_max_packet_life_time = _jingleDataChannel->maxPacketLifeTime().value_or(UINT16_MAX);
+  _cached_max_retransmits = _jingleDataChannel->maxRetransmitsOpt().value_or(UINT16_MAX);
   _cached_negotiated = _jingleDataChannel->negotiated();
   _cached_ordered = _jingleDataChannel->ordered();
   _cached_protocol = _jingleDataChannel->protocol();
@@ -299,7 +299,7 @@ Napi::Value RTCDataChannel::GetLabel(const Napi::CallbackInfo& info) {
 
 Napi::Value RTCDataChannel::GetMaxPacketLifeTime(const Napi::CallbackInfo& info) {
   auto max_packet_life_time = _jingleDataChannel
-      ? _jingleDataChannel->maxRetransmitTime()
+      ? _jingleDataChannel->maxPacketLifeTime().value_or(UINT16_MAX)
       : _cached_max_packet_life_time;
   CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), max_packet_life_time, result, Napi::Value)
   return result;
@@ -307,7 +307,7 @@ Napi::Value RTCDataChannel::GetMaxPacketLifeTime(const Napi::CallbackInfo& info)
 
 Napi::Value RTCDataChannel::GetMaxRetransmits(const Napi::CallbackInfo& info) {
   auto max_retransmits = _jingleDataChannel
-      ? _jingleDataChannel->maxRetransmits()
+      ? _jingleDataChannel->maxRetransmitsOpt().value_or(UINT16_MAX)
       : _cached_max_retransmits;
   CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), max_retransmits, result, Napi::Value)
   return result;

@@ -37,7 +37,7 @@ RTCVideoSink::RTCVideoSink(const Napi::CallbackInfo& info)
 
   _track = std::move(track);
 
-  rtc::VideoSinkWants wants;
+  webrtc::VideoSinkWants wants;
   _track->AddOrUpdateSink(this, wants);
 }
 

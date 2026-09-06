@@ -11,7 +11,9 @@
 
 #include <webrtc/api/audio_codecs/builtin_audio_decoder_factory.h>
 #include <webrtc/api/audio_codecs/builtin_audio_encoder_factory.h>
+#include <webrtc/api/audio/create_audio_device_module.h>
 #include <webrtc/api/create_peerconnection_factory.h>
+#include <webrtc/api/environment/environment_factory.h>
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/api/video_codecs/builtin_video_decoder_factory.h>
 #include <webrtc/api/video_codecs/builtin_video_encoder_factory.h>
@@ -23,8 +25,6 @@
 #include <webrtc/rtc_base/ssl_adapter.h>
 #include <webrtc/rtc_base/thread.h>
 
-#include "src/webrtc/test_audio_device_module.h"
-#include "src/webrtc/zero_capturer.h"
 
 namespace node_webrtc {
 
@@ -47,8 +47,6 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   }
 
   // TODO(mroberts): Read `audioLayer` from some PeerConnectionFactoryOptions?
-  auto audioLayer = MakeNothing<webrtc::AudioDeviceModule::AudioLayer>();
-
   _workerThread = rtc::Thread::CreateWithSocketServer();
   assert(_workerThread);
 
@@ -58,18 +56,11 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   result = _workerThread->Start();
   assert(result);
 
-  _audioDeviceModule = _workerThread->BlockingCall([audioLayer]() {
-    return audioLayer.Map([](auto audioLayer) {
-      // TODO(mroberts): I'm just trying to get this to compile right now.
-      // We need to call something like CreateDefaultTaskQueueFactory().
-      // This code is currently unused, though.
-      return webrtc::AudioDeviceModule::Create(audioLayer, nullptr);
-    }).Or([]() {
-      return TestAudioDeviceModule::CreateTestAudioDeviceModule(
-              ZeroCapturer::Create(48000),
-              TestAudioDeviceModule::CreateDiscardRenderer(48000));
-    });
+  _audioDeviceModule = _workerThread->BlockingCall([] {
+    return webrtc::CreateAudioDeviceModule(
+        webrtc::CreateEnvironment(), webrtc::AudioDeviceModule::kDummyAudio);
   });
+  assert(_audioDeviceModule);
 
   _signalingThread = rtc::Thread::Create();
   assert(_signalingThread);
@@ -84,11 +75,11 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
           _workerThread.get(),
           _workerThread.get(),
           _signalingThread.get(),
-          _audioDeviceModule.get(),
+          _audioDeviceModule,
           webrtc::CreateBuiltinAudioEncoderFactory(),
           webrtc::CreateBuiltinAudioDecoderFactory(),
-          webrtc::CreateBuiltinVideoEncoderFactory(),
-          webrtc::CreateBuiltinVideoDecoderFactory(),
+          nullptr,
+          nullptr,
           nullptr,
           nullptr);
   assert(_factory);
@@ -97,10 +88,12 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   options.network_ignore_mask = 0;
   _factory->SetOptions(options);
 
-  _networkManager = std::unique_ptr<rtc::NetworkManager>(new rtc::BasicNetworkManager());
+  _networkManager = std::unique_ptr<rtc::NetworkManager>(
+      new webrtc::BasicNetworkManager(webrtc::CreateEnvironment(), _workerThread->socketserver()));
   assert(_networkManager != nullptr);
 
-  _socketFactory = std::unique_ptr<rtc::PacketSocketFactory>(new rtc::BasicPacketSocketFactory(_workerThread.get()));
+  _socketFactory = std::unique_ptr<rtc::PacketSocketFactory>(
+      new webrtc::BasicPacketSocketFactory(_workerThread->socketserver()));
   assert(_socketFactory != nullptr);
 }
 
@@ -150,14 +143,14 @@ void PeerConnectionFactory::Release() {
 }
 
 void PeerConnectionFactory::Dispose() {
-  rtc::CleanupSSL();
+  webrtc::CleanupSSL();
 }
 
 void PeerConnectionFactory::Init(Napi::Env env, Napi::Object exports) {
   bool result;
   (void) result;
 
-  result = rtc::InitializeSSL();
+  result = webrtc::InitializeSSL();
   assert(result);
 
   auto func = DefineClass(env, "RTCPeerConnectionFactory", {});

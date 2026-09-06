@@ -3,6 +3,7 @@
 #include <webrtc/api/scoped_refptr.h>
 #include <webrtc/rtc_base/buffer.h>
 #include <webrtc/rtc_base/crypto_random.h>
+#include <webrtc/rtc_base/copy_on_write_buffer.h>
 #include <webrtc/rtc_base/ref_counted_object.h>
 
 namespace webrtc {
@@ -20,6 +21,7 @@ template <typename T>
 using scoped_refptr = webrtc::scoped_refptr<T>;
 
 using Buffer = webrtc::Buffer;
+using CopyOnWriteBuffer = webrtc::CopyOnWriteBuffer;
 using NetworkManager = webrtc::NetworkManager;
 using PacketSocketFactory = webrtc::PacketSocketFactory;
 using Thread = webrtc::Thread;

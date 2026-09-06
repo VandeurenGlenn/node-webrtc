@@ -184,10 +184,12 @@ endif()
 if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib
   )
 else()
   set(byproducts
     ${libwebrtc_binary_dir}/obj/libwebrtc.a
+    ${libwebrtc_binary_dir}/obj/api/video/libadapted_video_track_source.a
   )
 endif()
 
@@ -220,11 +222,23 @@ set(libwebrtc_binary_dir "${BINARY_DIR}")
 
 add_library(libwebrtc STATIC IMPORTED)
 add_dependencies(libwebrtc project_libwebrtc)
+if(APPLE)
+  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
+else()
+  add_library(libwebrtc_adapted_video_track_source STATIC IMPORTED)
+endif()
+add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib")
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
+  if(APPLE)
+    set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
+  else()
+    set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/libadapted_video_track_source.a")
+  endif()
 endif()
 
 # NOTE(mroberts): I would like this to be INTERFACE.
@@ -286,6 +300,7 @@ nodejs_init(${nodejs_init_args})
 
 file(GLOB_RECURSE MODULE_SRC src/*.cc src/*.h)
 list(FILTER MODULE_SRC EXCLUDE REGEX ".*/rtc_peer_connection/stats_observer\\.(cc|h)$")
+list(FILTER MODULE_SRC EXCLUDE REGEX ".*/webrtc/test_audio_device_module\\.(cc|h)$")
 add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
@@ -332,6 +347,7 @@ target_include_directories(${MODULE} PRIVATE
 target_link_libraries(${MODULE} PRIVATE
   ${CMAKE_THREAD_LIBS_INIT}
   libwebrtc
+  libwebrtc_adapted_video_track_source
 )
 
 target_compile_definitions(${MODULE} PRIVATE
