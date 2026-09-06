@@ -5,6 +5,12 @@ on:
   pull_request:
     branches:
       - develop
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -14,12 +20,20 @@ jobs:
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        node: [26]
+        include:
+          - os: ubuntu-latest
+            node: 26
+            generator: Ninja
+          - os: windows-latest
+            node: 26
+            generator: Visual Studio 17 2022
+          - os: macos-latest
+            node: 26
+            generator: Ninja
 
     steps:
       - name: Checkout
@@ -30,19 +44,26 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Install ninja (Linux)
+      - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev gcc-12 g++-12
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 120 --slave /usr/bin/g++ g++ /usr/bin/g++-12
           sudo update-alternatives --set gcc /usr/bin/gcc-12
-      - name: Build from source (Linux)
-        if: runner.os == 'Linux'
+
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install package dependencies
+        run: npm install --ignore-scripts
+
+      - name: Build from source
         env:
+          CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
-          CMAKE_GENERATOR: Ninja
-        run: npm install
+        run: npm run build
 
       - name: Smoke load addon
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"
@@ -50,19 +71,65 @@ jobs:
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
 
-      - name: Package Linux addon
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          version=$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")
-          test -s build/Release/wrtc.node
-          mkdir -p artifacts
-          tar -czf "artifacts/wrtc-v${version}-napi-v3-linux-x64.tar.gz" -C build/Release wrtc.node
+      - name: Package native addon
+        run: npm run node-pre-gyp-package
 
-      - name: Preserve tested Linux addon
-        if: runner.os == 'Linux'
+      - name: Preserve tested native addon
         uses: actions/upload-artifact@v4
         with:
-          name: wrtc-linux-x64
-          path: artifacts/*.tar.gz
+          name: wrtc-${{ runner.os }}-${{ runner.arch }}
+          path: build/stage/**/*.tar.gz
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: source-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download tested native addons
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wrtc-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          expected_tag="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $expected_tag" >&2
+            exit 1
+          fi
+
+          asset_count="$(find release-assets -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
+          if [ "$asset_count" -ne 3 ]; then
+            echo "Expected 3 native archives, found $asset_count" >&2
+            find release-assets -type f -print
+            exit 1
+          fi
+
+          while IFS= read -r asset; do
+            tar -tzf "$asset" | grep -qx 'Release/wrtc.node'
+          done < <(find release-assets -type f -name '*.tar.gz' | sort)
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mapfile -t assets < <(find release-assets -type f -name '*.tar.gz' | sort)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --verify-tag \
+              --generate-notes \
+              --title "@vandeurenglenn/wrtc $GITHUB_REF_NAME"
+          fi
