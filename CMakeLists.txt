@@ -170,6 +170,14 @@ endif()
 if (WIN32 OR (UNIX AND NOT APPLE))
   list(APPEND GN_GEN_ARGS is_clang=false)
 endif()
+if (WIN32)
+  # The pinned WebRTC/NASM sources emit warnings with current MSVC that were
+  # not produced by the compiler version they originally targeted.
+  list(APPEND GN_GEN_ARGS
+    treat_warnings_as_errors=false
+    fatal_linker_warnings=false
+  )
+endif()
 if (UNIX AND NOT APPLE)
   list(APPEND GN_GEN_ARGS
     use_custom_libcxx=false
