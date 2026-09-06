@@ -138,7 +138,6 @@ list(APPEND GN_GEN_ARGS
   rtc_build_examples=false
   rtc_use_x11=false
   rtc_enable_protobuf=false
-  rtc_use_gtk=false
   rtc_include_pulse_audio=false
   rtc_include_tests=false
 )
@@ -186,7 +185,6 @@ else()
   list(APPEND GN_GEN_ARGS is_debug=false)
 endif()
 if (APPLE)
-  list(APPEND GN_GEN_ARGS use_system_xcode=true)
   if (WEBRTC_MODERN_APPLE_COMPAT)
     list(APPEND GN_GEN_ARGS
       treat_warnings_as_errors=false
