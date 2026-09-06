@@ -2,9 +2,12 @@
 /* eslint no-console:0, no-process-env:0 */
 
 import { spawnSync } from "child_process";
+import { createRequire } from "module";
 import { fileURLToPath } from "url";
 
 const args = ["configure"];
+const require = createRequire(import.meta.url);
+const ncmake = require.resolve("node-cmake/lib/ncmake.js");
 
 const generator =
   process.env.CMAKE_GENERATOR ||
@@ -14,16 +17,13 @@ const generator =
       : "Visual Studio 16 2019"
     : undefined);
 
-const generatorArg =
-  generator && generator.includes(" ") ? `"${generator}"` : generator;
-
 if (process.env.DEBUG) {
   args.push("--debug");
 }
 
-if (generatorArg) {
+if (generator) {
   args.push("-g");
-  args.push(generatorArg);
+  args.push(generator);
 }
 
 const buildEnv = { ...process.env };
@@ -39,8 +39,7 @@ if (process.platform === "linux") {
 
 function main() {
   console.log("Running ncmake " + args.join(" "));
-  let { status } = spawnSync("ncmake", args, {
-    shell: true,
+  let { status } = spawnSync(process.execPath, [ncmake, ...args], {
     stdio: "inherit",
     env: buildEnv,
   });
@@ -49,8 +48,7 @@ function main() {
   }
 
   console.log("Running ncmake build");
-  status = spawnSync("ncmake", ["build"], {
-    shell: true,
+  status = spawnSync(process.execPath, [ncmake, "build"], {
     stdio: "inherit",
     env: buildEnv,
   }).status;

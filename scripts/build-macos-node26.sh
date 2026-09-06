@@ -20,7 +20,13 @@ fi
 nvm use 26.2.0
 
 export PATH="/usr/bin:$PATH"
-export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+if [ -z "${DEVELOPER_DIR:-}" ]; then
+  if [ -d /Applications/Xcode.app/Contents/Developer ]; then
+    export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+  else
+    export DEVELOPER_DIR="$(xcode-select -p)"
+  fi
+fi
 export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
 export FORCE_MAC_SDK_MIN="${FORCE_MAC_SDK_MIN:-15.4}"
 export SKIP_DOWNLOAD=true
