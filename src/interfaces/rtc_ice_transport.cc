@@ -14,6 +14,8 @@
 #include "src/enums/webrtc/ice_transport_state.h"
 #include "src/interfaces/rtc_peer_connection/peer_connection_factory.h"
 
+#include <webrtc/rtc_base/thread.h>
+
 namespace node_webrtc {
 
 Napi::FunctionReference& RTCIceTransport::constructor() {
@@ -36,7 +38,7 @@ RTCIceTransport::RTCIceTransport(const Napi::CallbackInfo& info)
 
   _transport = std::move(transport);
 
-  _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
+  _factory->_workerThread->BlockingCall([this]() {
     auto internal = _transport->internal();
     if (internal) {
       internal->SubscribeIceTransportStateChanged(
@@ -84,7 +86,7 @@ void RTCIceTransport::OnRTCDtlsTransportStopped() {
 }
 
 void RTCIceTransport::Stop() {
-  _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
+  _factory->_workerThread->BlockingCall([this]() {
     auto internal = _transport->internal();
     if (internal) {
       internal->RemoveGatheringStateCallback(this);
@@ -170,13 +172,13 @@ Napi::Value RTCIceTransport::GetGatheringState(const Napi::CallbackInfo& info) {
   std::lock_guard<std::mutex> lock(_mutex);
   webrtc::PeerConnectionInterface::IceGatheringState state;
   switch (_gathering_state) {
-    case cricket::IceGatheringState::kIceGatheringNew:
+    case webrtc::IceGatheringState::kIceGatheringNew:
       state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
       break;
-    case cricket::IceGatheringState::kIceGatheringGathering:
+    case webrtc::IceGatheringState::kIceGatheringGathering:
       state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
       break;
-    case cricket::IceGatheringState::kIceGatheringComplete:
+    case webrtc::IceGatheringState::kIceGatheringComplete:
       state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
       break;
   }

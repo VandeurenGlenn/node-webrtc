@@ -285,6 +285,7 @@ endif()
 nodejs_init(${nodejs_init_args})
 
 file(GLOB_RECURSE MODULE_SRC src/*.cc src/*.h)
+list(FILTER MODULE_SRC EXCLUDE REGEX ".*/rtc_peer_connection/stats_observer\\.(cc|h)$")
 add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 

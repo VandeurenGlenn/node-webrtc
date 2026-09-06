@@ -20,7 +20,6 @@
 #include <webrtc/modules/audio_device/include/audio_device.h>
 #include <webrtc/modules/audio_device/include/fake_audio_device.h>
 #include <webrtc/p2p/base/basic_packet_socket_factory.h>
-#include <webrtc/rtc_base/location.h>
 #include <webrtc/rtc_base/ssl_adapter.h>
 #include <webrtc/rtc_base/thread.h>
 
@@ -59,7 +58,7 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   result = _workerThread->Start();
   assert(result);
 
-  _audioDeviceModule = _workerThread->Invoke<rtc::scoped_refptr<webrtc::AudioDeviceModule>>(RTC_FROM_HERE, [audioLayer]() {
+  _audioDeviceModule = _workerThread->BlockingCall([audioLayer]() {
     return audioLayer.Map([](auto audioLayer) {
       // TODO(mroberts): I'm just trying to get this to compile right now.
       // We need to call something like CreateDefaultTaskQueueFactory().
@@ -108,7 +107,7 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
 PeerConnectionFactory::~PeerConnectionFactory() {
   _factory = nullptr;
 
-  _workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
+  _workerThread->BlockingCall([this]() {
     this->_audioDeviceModule = nullptr;
   });
 

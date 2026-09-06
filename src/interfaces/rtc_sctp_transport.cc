@@ -13,6 +13,8 @@
 #include "src/interfaces/rtc_dtls_transport.h"
 #include "src/interfaces/rtc_peer_connection/peer_connection_factory.h"
 
+#include <webrtc/rtc_base/thread.h>
+
 namespace node_webrtc {
 
 Napi::FunctionReference& RTCSctpTransport::constructor() {
@@ -35,7 +37,7 @@ RTCSctpTransport::RTCSctpTransport(const Napi::CallbackInfo& info)
 
   _transport = std::move(transport);
 
-  _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
+  _factory->_workerThread->BlockingCall([this]() {
     _dtls_transport = _transport->dtls_transport();
     _transport->RegisterObserver(this);
   });

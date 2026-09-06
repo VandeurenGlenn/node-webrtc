@@ -17,14 +17,6 @@
 
 #include "src/functional/maybe.h"
 
-namespace rtc {
-
-class NetworkManager;
-class PacketSocketFactory;
-class Thread;
-
-}  // namespace rtc
-
 namespace webrtc {
 
 class PeerConnectionFactoryInterface;

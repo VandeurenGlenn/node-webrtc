@@ -20,7 +20,7 @@ namespace node_webrtc {
 
 class RTCVideoSink
   : public AsyncObjectWrapWithLoop<RTCVideoSink>
-  , public rtc::VideoSinkInterface<webrtc::VideoFrame> {
+  , public webrtc::VideoSinkInterface<webrtc::VideoFrame> {
  public:
   explicit RTCVideoSink(const Napi::CallbackInfo&);
 

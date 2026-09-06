@@ -1,8 +1,9 @@
 #pragma once
 
+#include <webrtc/api/scoped_refptr.h>
+
 #include "src/converters/napi.h"
 
-namespace rtc { template <typename T> class scoped_refptr; }
 namespace webrtc { class RTCStatsReport; }
 
 namespace node_webrtc {

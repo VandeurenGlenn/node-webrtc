@@ -8,7 +8,7 @@
 #include "src/interfaces/media_stream_track.h"
 
 #include <webrtc/api/peer_connection_interface.h>
-#include <webrtc/rtc_base/helpers.h>
+#include <webrtc/rtc_base/crypto_random.h>
 
 #include "src/converters.h"
 #include "src/converters/interfaces.h"

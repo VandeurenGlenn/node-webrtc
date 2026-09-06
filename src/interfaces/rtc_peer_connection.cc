@@ -44,7 +44,6 @@
 #include "src/interfaces/rtc_peer_connection/peer_connection_factory.h"
 #include "src/interfaces/rtc_peer_connection/rtc_stats_collector.h"
 #include "src/interfaces/rtc_peer_connection/set_session_description_observer.h"
-#include "src/interfaces/rtc_peer_connection/stats_observer.h"
 #include "src/interfaces/rtc_rtp_receiver.h"
 #include "src/interfaces/rtc_rtp_sender.h"
 #include "src/interfaces/rtc_rtp_transceiver.h"
@@ -178,7 +177,8 @@ static Validation<Napi::Value> CreateRTCPeerConnectionIceErrorEvent(
   return Pure(scope.Escape(object));
 }
 
-void RTCPeerConnection::OnIceCandidateError(const std::string& host_candidate, const std::string& url, int error_code, const std::string& error_text) {
+void RTCPeerConnection::OnIceCandidateError(const std::string& address, int port, const std::string& url, int error_code, const std::string& error_text) {
+  const auto host_candidate = address.empty() ? address : address + ":" + std::to_string(port);
   Dispatch(CreateCallback<RTCPeerConnection>([this, host_candidate, url, error_code, error_text]() {
     auto env = Env();
     auto maybeEvent = Validation<Napi::Value>::Join(curry(CreateRTCPeerConnectionIceErrorEvent)
@@ -549,19 +549,7 @@ Napi::Value RTCPeerConnection::LegacyGetStats(const Napi::CallbackInfo& info) {
   auto env = info.Env();
 
   CREATE_DEFERRED(env, deferred)
-
-  if (!_jinglePeerConnection) {
-    Reject(deferred, Napi::Error::New(env, "RTCPeerConnection is closed"));
-    return deferred.Promise();
-  }
-
-  auto statsObserver = new rtc::RefCountedObject<StatsObserver>(this, deferred);
-  if (!_jinglePeerConnection->GetStats(statsObserver, nullptr,
-          webrtc::PeerConnectionInterface::kStatsOutputLevelStandard)) {
-    Reject(deferred, Napi::Error::New(env, "Failed to execute getStats"));
-    return deferred.Promise();
-  }
-
+  Reject(deferred, Napi::Error::New(env, "Legacy getStats is not supported by WebRTC 7977; use promise-based getStats()"));
   return deferred.Promise();
 }
 
