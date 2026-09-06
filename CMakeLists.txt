@@ -193,11 +193,27 @@ if (APPLE)
       fatal_linker_warnings=false
     )
   endif()
-  if (WEBRTC_USE_SYSTEM_XCODE_CLANG AND DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
-    list(APPEND GN_GEN_ARGS
-      clang_base_path="$ENV{DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr"
-      clang_use_chrome_plugins=false
-    )
+  if (WEBRTC_USE_SYSTEM_XCODE_CLANG)
+    if (DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
+      set(apple_clang_base_path "$ENV{DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr")
+    else()
+      execute_process(
+        COMMAND xcrun --find clang
+        OUTPUT_VARIABLE apple_clang_path
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE apple_clang_result
+      )
+      if (apple_clang_result EQUAL 0)
+        get_filename_component(apple_clang_bin_dir "${apple_clang_path}" DIRECTORY)
+        get_filename_component(apple_clang_base_path "${apple_clang_bin_dir}" DIRECTORY)
+      endif()
+    endif()
+    if (apple_clang_base_path)
+      list(APPEND GN_GEN_ARGS
+        clang_base_path="${apple_clang_base_path}"
+        clang_use_chrome_plugins=false
+      )
+    endif()
   endif()
 endif()
 if (APPLE AND DEFINED ENV{SDKROOT} AND NOT "$ENV{SDKROOT}" STREQUAL "")

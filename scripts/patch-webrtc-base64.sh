@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Patch WebRTC base64.h and base64.cc to add #include <cstdint> if missing
 set -e
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 webrtc_dir="$1/rtc_base/third_party/base64"
 for f in base64.h base64.cc; do
   file="$webrtc_dir/$f"
@@ -12,3 +13,7 @@ for f in base64.h base64.cc; do
     echo "Patched $file with #include <cstdint>"
   fi
 done
+
+if [ "$(uname)" = "Darwin" ]; then
+  python3 "$script_dir/patch-webrtc-apple-clt.py" "$1"
+fi
