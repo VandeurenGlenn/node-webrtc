@@ -28,7 +28,7 @@ jobs:
           - os: ubuntu-latest
             node: 26
             generator: Ninja
-          - os: windows-latest
+          - os: windows-2022
             node: 26
             generator: Visual Studio 17 2022
           - os: macos-latest
