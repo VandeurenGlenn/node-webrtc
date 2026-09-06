@@ -39,8 +39,14 @@ RTCIceTransport::RTCIceTransport(const Napi::CallbackInfo& info)
   _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
     auto internal = _transport->internal();
     if (internal) {
-      internal->SignalIceTransportStateChanged.connect(this, &RTCIceTransport::OnStateChanged);
-      internal->SignalGatheringState.connect(this, &RTCIceTransport::OnGatheringStateChanged);
+      internal->SubscribeIceTransportStateChanged(
+          this, [this](webrtc::IceTransportInternal* transport) {
+            OnStateChanged(transport);
+          });
+      internal->AddGatheringStateCallback(
+          this, [this](webrtc::IceTransportInternal* transport) {
+            OnGatheringStateChanged(transport);
+          });
     }
     TakeSnapshot();
     if (_state == webrtc::IceTransportState::kClosed) {
@@ -59,7 +65,7 @@ void RTCIceTransport::TakeSnapshot() {
     _gathering_state = internal->gathering_state();
   } else {
     _state = webrtc::IceTransportState::kClosed;
-    _gathering_state = cricket::IceGatheringState::kIceGatheringComplete;
+    _gathering_state = webrtc::IceGatheringState::kIceGatheringComplete;
   }
 }
 
@@ -73,15 +79,17 @@ RTCIceTransport::~RTCIceTransport() {
 void RTCIceTransport::OnRTCDtlsTransportStopped() {
   std::lock_guard<std::mutex> lock(_mutex);
   _state = webrtc::IceTransportState::kClosed;
-  _gathering_state = cricket::IceGatheringState::kIceGatheringComplete;
+  _gathering_state = webrtc::IceGatheringState::kIceGatheringComplete;
   Stop();
 }
 
 void RTCIceTransport::Stop() {
-  // _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
-  //   _transport->internal()->SignalIceTransportStateChanged.disconnect(this);
-  //   _transport->internal()->SignalGatheringState.disconnect(this);
-  // });
+  _factory->_workerThread->Invoke<void>(RTC_FROM_HERE, [this]() {
+    auto internal = _transport->internal();
+    if (internal) {
+      internal->RemoveGatheringStateCallback(this);
+    }
+  });
   AsyncObjectWrapWithLoop<RTCIceTransport>::Stop();
 }
 
@@ -112,7 +120,7 @@ RTCIceTransport* RTCIceTransport::Create(
   return RTCIceTransport::Unwrap(object);
 }
 
-void RTCIceTransport::OnStateChanged(cricket::IceTransportInternal*) {
+void RTCIceTransport::OnStateChanged(webrtc::IceTransportInternal*) {
   TakeSnapshot();
 
   Dispatch(CreateCallback<RTCIceTransport>([this]() {
@@ -128,7 +136,7 @@ void RTCIceTransport::OnStateChanged(cricket::IceTransportInternal*) {
   }
 }
 
-void RTCIceTransport::OnGatheringStateChanged(cricket::IceTransportInternal*) {
+void RTCIceTransport::OnGatheringStateChanged(webrtc::IceTransportInternal*) {
   TakeSnapshot();
 
   Dispatch(CreateCallback<RTCIceTransport>([this]() {

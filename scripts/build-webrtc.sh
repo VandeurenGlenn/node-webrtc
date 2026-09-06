@@ -19,13 +19,7 @@ if [ -z "$NINJA_BIN" ]; then
   exit 1
 fi
 
-export TARGETS="webrtc libjingle_peerconnection"
-if [[ "$(uname)" == "Linux" && "$TARGET_ARCH" == arm* ]]; then
-  export TARGETS="$TARGETS pc:peerconnection libc++ libc++abi"
-fi
-if [[ "$(uname)" == "Darwin" ]]; then
-  export TARGETS="$TARGETS libc++"
-fi
+export TARGETS="webrtc"
 
 if [ -z "$PARALLELISM" ]; then
   "$NINJA_BIN" $TARGETS

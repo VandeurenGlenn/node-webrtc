@@ -3,7 +3,6 @@
 #include "src/converters.h"
 #include "src/converters/napi.h"
 
-namespace rtc { template <typename T> class scoped_refptr; }
 namespace webrtc { class I420Buffer; }
 namespace webrtc { class I420BufferInterface; }
 namespace webrtc { class VideoFrameBuffer; }
