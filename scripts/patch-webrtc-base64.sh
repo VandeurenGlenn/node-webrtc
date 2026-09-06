@@ -14,6 +14,11 @@ for f in base64.h base64.cc; do
   fi
 done
 
-if [ "$(uname)" = "Darwin" ]; then
-  python3 "$script_dir/patch-webrtc-apple-clt.py" "$1"
-fi
+case "$(uname -s)" in
+  Darwin)
+    python3 "$script_dir/patch-webrtc-apple-clt.py" "$1"
+    ;;
+  CYGWIN*|MINGW*|MSYS*)
+    python "$script_dir/patch-webrtc-windows.py" "$1"
+    ;;
+esac
