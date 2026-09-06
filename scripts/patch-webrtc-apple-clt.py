@@ -70,7 +70,7 @@ replace_once(
   if not sdk_dir:
     raise SdkError('Install Xcode or Apple Command Line Tools and select its ' +
       'developer directory with xcode-select.')
-    """,
+""",
 )
 replace_once(
     find_sdk,
@@ -86,6 +86,11 @@ replace_once(
       bin_path = 'Toolchains/XcodeDefault.xctoolchain/usr/bin/'
       print(os.path.join(dev_dir, bin_path))
 """,
+)
+replace_once(
+    find_sdk,
+    r"re.findall('^MacOSX(\d+\.\d+)\.sdk$', s)",
+    r"re.findall(r'^MacOSX(\d+\.\d+)\.sdk$', s)",
 )
 
 # setuptools no longer installs pkg_resources by default on modern Python.
