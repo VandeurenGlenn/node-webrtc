@@ -202,6 +202,7 @@ void RTCPeerConnection::OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInte
   auto observer = new DataChannelObserver(_factory, channel);
   Dispatch(CreateCallback<RTCPeerConnection>([this, observer]() {
     auto channel = RTCDataChannel::wrap()->GetOrCreate(observer, observer->channel());
+    _channels.push_back(channel);
     MakeCallback("ondatachannel", { channel->Value() });
   }));
 }
@@ -600,7 +601,6 @@ Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
   }
 
   _jinglePeerConnection = nullptr;
-
   if (_factory) {
     if (_shouldReleaseFactory) {
       PeerConnectionFactory::Release();

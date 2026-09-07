@@ -30,13 +30,15 @@ tape('custom ports connect concurrently', function(t) {
 function connectClientServer(portRange, callback) {
   const client = new SimplePeer({
     wrtc: wrtc,
-    initiator: true
+    initiator: true,
+    config: { iceServers: [] }
   });
 
   const server = new SimplePeer({
     wrtc: wrtc,
     initiator: false,
     config: {
+      iceServers: [],
       portRange: portRange
     }
   });

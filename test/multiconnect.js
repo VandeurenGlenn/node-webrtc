@@ -61,10 +61,14 @@ function connect(callback) {
   // setup two peers with simple-peer
   var peer1 = new SimplePeer({
     wrtc: wrtc,
+    trickle: false,
+    config: { iceServers: [] },
   });
   var peer2 = new SimplePeer({
     wrtc: wrtc,
     initiator: true,
+    trickle: false,
+    config: { iceServers: [] },
   });
   var timer = null;
   var finished = false;

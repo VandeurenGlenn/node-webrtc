@@ -29,4 +29,5 @@ fi
 # takes too long in CI; so do this manually.
 (cd build/util && "$PYTHON_BIN" lastchange.py -o LASTCHANGE)
 
+"$SCRIPT_DIR/patch-webrtc-media-defaults.sh" "$SOURCE_DIR"
 gn gen ${BINARY_DIR} "--args=${GN_GEN_ARGS}"

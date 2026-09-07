@@ -78,8 +78,8 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
           _audioDeviceModule,
           webrtc::CreateBuiltinAudioEncoderFactory(),
           webrtc::CreateBuiltinAudioDecoderFactory(),
-          nullptr,
-          nullptr,
+          webrtc::CreateBuiltinVideoEncoderFactory(),
+          webrtc::CreateBuiltinVideoDecoderFactory(),
           nullptr,
           nullptr);
   assert(_factory);
