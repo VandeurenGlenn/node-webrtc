@@ -89,7 +89,7 @@ else()
   )
 endif()
 
-if (WIN32 OR (UNIX AND NOT APPLE))
+if (WIN32)
   list(APPEND GN_GEN_ARGS is_clang=false)
 endif()
 if(WIN32)
