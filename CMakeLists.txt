@@ -185,7 +185,7 @@ if (WIN32)
     ${libwebrtc_binary_dir}/obj/webrtc.lib
     ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib
   )
-elseif(APPLE)
+elseif(UNIX)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/libwebrtc.a
     ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o
@@ -226,7 +226,7 @@ set(libwebrtc_binary_dir "${BINARY_DIR}")
 
 add_library(libwebrtc STATIC IMPORTED)
 add_dependencies(libwebrtc project_libwebrtc)
-if(APPLE)
+if(UNIX)
   add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
 else()
   add_library(libwebrtc_adapted_video_track_source STATIC IMPORTED)
@@ -238,7 +238,7 @@ if(WIN32)
   set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib")
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
-  if(APPLE)
+  if(UNIX)
     set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
   else()
     set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/libadapted_video_track_source.a")
@@ -309,9 +309,13 @@ add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
 if(MSVC)
-  target_compile_options(${MODULE} PRIVATE "/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h")
+  target_compile_options(${MODULE} PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h>"
+  )
 else()
-  target_compile_options(${MODULE} PRIVATE "-include${CMAKE_SOURCE_DIR}/src/webrtc/compat.h")
+  target_compile_options(${MODULE} PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_SOURCE_DIR}/src/webrtc/compat.h>"
+  )
 endif()
 
 if(NOT iwyu_path STREQUAL "iwyu_path-NOTFOUND")
