@@ -89,12 +89,9 @@ else()
   )
 endif()
 
-if (WIN32)
-  list(APPEND GN_GEN_ARGS is_clang=false)
-endif()
 if(WIN32)
-  # The pinned WebRTC/NASM sources emit warnings with current MSVC that were
-  # not produced by the compiler version they originally targeted.
+  # Build WebRTC with its bundled clang-cl while keeping the MSVC STL ABI used
+  # by the Node addon. Modern compiler-rt sources are not accepted by cl.exe.
   list(APPEND GN_GEN_ARGS
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false

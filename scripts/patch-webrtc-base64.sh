@@ -5,8 +5,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 webrtc_dir="$1/rtc_base/third_party/base64"
 if [ ! -d "$webrtc_dir" ]; then
   echo "Modern WebRTC source layout detected; skipping legacy compatibility patches"
+  python_bin=python
+  if ! command -v "$python_bin" >/dev/null 2>&1; then
+    python_bin=python3
+  fi
+  "$python_bin" "$script_dir/patch-webrtc-modern-cpp.py" "$1"
   if [ "$(uname -s)" = "Darwin" ]; then
-    python3 "$script_dir/patch-webrtc-apple-clt-modern.py" "$1"
+    "$python_bin" "$script_dir/patch-webrtc-apple-clt-modern.py" "$1"
   fi
   exit 0
 fi
