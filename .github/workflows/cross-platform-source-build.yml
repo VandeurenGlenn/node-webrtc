@@ -72,6 +72,16 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
+      - name: Cache WebRTC checkout
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/external/depot_tools/src
+            build/external/libwebrtc/download
+          key: webrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'scripts/download-webrtc.*', 'scripts/configure-webrtc.*', 'scripts/patch-webrtc-*') }}
+          restore-keys: |
+            webrtc-${{ runner.os }}-${{ runner.arch }}-
+
       - name: Install package dependencies
         run: npm install --ignore-scripts
 
