@@ -3,24 +3,23 @@
   <img height="120px" src="https://webrtc.github.io/webrtc-org/assets/images/webrtc-logo-vert-retro-dist.svg" />
 </h1>
 
-[![NPM](https://img.shields.io/npm/v/wrtc.svg)](https://www.npmjs.com/package/wrtc) [![macOS/Linux Build Status](https://circleci.com/gh/node-webrtc/node-webrtc/tree/develop.svg?style=shield)](https://circleci.com/gh/node-webrtc/node-webrtc) [![Windows Build status](https://ci.appveyor.com/api/projects/status/iulc84we28o1i7b9?svg=true)](https://ci.appveyor.com/project/markandrus/node-webrtc-7bnua)
+[![NPM](https://img.shields.io/npm/v/@vandeurenglenn/wrtc.svg)](https://www.npmjs.com/package/@vandeurenglenn/wrtc) [![Cross Platform Source Build](https://github.com/VandeurenGlenn/node-webrtc/actions/workflows/cross-platform-source-build.yml/badge.svg?branch=develop)](https://github.com/VandeurenGlenn/node-webrtc/actions/workflows/cross-platform-source-build.yml)
 
-node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M87](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4280). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
+node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M152, branch-heads/7977](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7977). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
 
+Modern source builds are continuously tested with Node.js 26 on Linux, macOS,
+and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
+`clang-cl` on Windows, and its pinned toolchain on macOS. The addon and WebRTC
+share each platform's standard C++ library ABI.
 
-⚠️ **Windows CI Notice (2026):**
-
-Native builds of node-webrtc on Windows require Visual Studio 2019 or 2017 due to upstream libwebrtc/Chromium toolchain limitations. GitHub Actions and most CI providers now only offer Visual Studio 2022 (windows-latest, windows-2022), which is not recognized by the upstream build scripts. Until Chromium/libwebrtc adds VS2022 support, Windows native builds may fail in CI. Track upstream for updates.
-
-Prebuilt binaries for Windows are still published and supported.
-
----
+Windows source builds use Visual Studio 2022 for CMake and the Node addon;
+WebRTC itself is compiled with its bundled `clang-cl`.
 
 Install
 -------
 
 ```
-npm install wrtc
+npm install @vandeurenglenn/wrtc
 ```
 
 Installing from NPM downloads a prebuilt binary for your operating system × architecture. Set the `TARGET_ARCH` environment variable to "arm" or "arm64" to download for armv7l or arm64, respectively. Linux and macOS users can also set the `DEBUG` environment variable to download debug builds.
