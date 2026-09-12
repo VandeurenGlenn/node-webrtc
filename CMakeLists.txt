@@ -92,7 +92,7 @@ endif()
 if (WIN32 OR (UNIX AND NOT APPLE))
   list(APPEND GN_GEN_ARGS is_clang=false)
 endif()
-if (WIN32)
+if(WIN32)
   # The pinned WebRTC/NASM sources emit warnings with current MSVC that were
   # not produced by the compiler version they originally targeted.
   list(APPEND GN_GEN_ARGS
@@ -169,7 +169,7 @@ if (DEFINED ENV{FORCE_MAC_SDK_MIN} AND NOT "$ENV{FORCE_MAC_SDK_MIN}" STREQUAL ""
   list(APPEND webrtc_build_env FORCE_MAC_SDK_MIN=$ENV{FORCE_MAC_SDK_MIN})
 endif()
 
-if(WIN32)
+if (WIN32)
   set(suffix bat)
   set(PLATFORM windows)
 else()
@@ -185,6 +185,11 @@ if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
     ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib
+  )
+elseif(APPLE)
+  set(byproducts
+    ${libwebrtc_binary_dir}/obj/libwebrtc.a
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o
   )
 else()
   set(byproducts
