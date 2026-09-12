@@ -125,7 +125,8 @@ See [node-webrtc/node-webrtc-examples](https://github.com/node-webrtc/node-webrt
 Contributing
 ------------
 
-Contributions welcome! Please refer to the [wiki](https://github.com/node-webrtc/node-webrtc/wiki/Contributing).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the local
+build, test, and pull-request workflow.
 
 Benchmarking
 ------------
