@@ -186,7 +186,7 @@ endif()
 if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
-    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj
   )
 elseif(UNIX)
   set(byproducts
@@ -229,23 +229,15 @@ set(libwebrtc_binary_dir "${BINARY_DIR}")
 
 add_library(libwebrtc STATIC IMPORTED)
 add_dependencies(libwebrtc project_libwebrtc)
-if(UNIX)
-  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
-else()
-  add_library(libwebrtc_adapted_video_track_source STATIC IMPORTED)
-endif()
+add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
 add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
-  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source.lib")
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj")
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
-  if(UNIX)
-    set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
-  else()
-    set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/api/video/libadapted_video_track_source.a")
-  endif()
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
 endif()
 
 # NOTE(mroberts): I would like this to be INTERFACE.
