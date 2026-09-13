@@ -146,6 +146,10 @@ jobs:
           run-id: ${{ steps.prebuilt.outputs.run-id }}
           github-token: ${{ github.token }}
 
+      - name: Prepare WebRTC prebuilt layout
+        if: steps.prebuilt.outputs.run-id != ''
+        run: node scripts/prepare-webrtc-prebuilt.js
+
       - name: Install package dependencies
         run: npm install --ignore-scripts
 

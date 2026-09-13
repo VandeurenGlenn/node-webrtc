@@ -7,6 +7,8 @@ or patch changes invalidate only that platform's artifact.
 Documentation-only pull requests skip the native build matrix. Set
 `WEBRTC_PREBUILT=1` only when the matching tree is already present below
 `build/external/libwebrtc`; normal local builds should leave it unset.
+Downloaded artifacts recreate the `download/webrtc` source alias because GitHub
+Artifacts does not preserve the checkout's symbolic link.
 
 node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
 [node-cmake](https://github.com/cjntaylor/node-cmake).
