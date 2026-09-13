@@ -1,8 +1,9 @@
 # Build from Source
 
 Pull-request CI reuses platform-specific, pinned libwebrtc artifacts when the
-WebRTC revision and build inputs are unchanged. Changes to CMake or the WebRTC
-download, configure, build, or patch scripts automatically force a full rebuild.
+WebRTC revision and relevant platform build inputs are unchanged. Shared changes
+invalidate all platforms; platform-specific CMake, download, configure, build,
+or patch changes invalidate only that platform's artifact.
 Documentation-only pull requests skip the native build matrix. Set
 `WEBRTC_PREBUILT=1` only when the matching tree is already present below
 `build/external/libwebrtc`; normal local builds should leave it unset.

@@ -52,115 +52,13 @@ set(libwebrtc_src_dir ${CMAKE_BINARY_DIR}/external/libwebrtc/download/src)
 # libwebrtc
 # -----------------------------------------------------------------------------
 
-# branch-heads/7977 (Chromium/WebRTC M152). Pin the resolved commit so builds do
-# not change when upstream updates the release branch.
-set(
-  WEBRTC_REVISION
-  6f37672d358475cd17544121a12494da454d85fb
-  CACHE STRING
-  "Pinned libwebrtc Git revision"
-)
-
-option(WEBRTC_MODERN_APPLE_COMPAT "Enable compatibility flags for modern Xcode/SDK on macOS" ON)
-option(WEBRTC_USE_SYSTEM_XCODE_CLANG "Use Xcode clang toolchain for libwebrtc on macOS" OFF)
-
-list(APPEND GN_GEN_ARGS
-  rtc_build_examples=false
-  rtc_use_x11=false
-  rtc_enable_protobuf=false
-  rtc_include_pulse_audio=false
-  rtc_include_tests=false
-)
-if ("$ENV{TARGET_ARCH}" STREQUAL "arm")
-  list(APPEND GN_GEN_ARGS
-    target_os="linux"
-    target_cpu="arm"
-    rtc_build_tools=true
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-elseif ("$ENV{TARGET_ARCH}" STREQUAL "arm64")
-  if(NOT APPLE)
-  list(APPEND GN_GEN_ARGS
-    target_os="linux"
-  )
-  endif()
-  list(APPEND GN_GEN_ARGS
-    target_cpu="arm64"
-    rtc_build_tools=true
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-else()
-  list(APPEND GN_GEN_ARGS
-    rtc_build_tools=false
-  )
-endif()
-
+include(${CMAKE_SOURCE_DIR}/cmake/webrtc-common.cmake)
 if(WIN32)
-  # Build WebRTC with its bundled clang-cl while keeping the MSVC STL ABI used
-  # by the Node addon. ThinLTO remains disabled so the resulting archive can be
-  # consumed by the addon's clang-cl/lld-link toolchain.
-  list(APPEND GN_GEN_ARGS
-    use_thin_lto=false
-    use_custom_libcxx=false
-    use_custom_libcxx_for_host=false
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-endif()
-if (UNIX AND NOT APPLE)
-  list(APPEND GN_GEN_ARGS
-    use_thin_lto=false
-    use_thin_archives=false
-    use_custom_libcxx=false
-    use_custom_libcxx_for_host=false
-    use_sysroot=false
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-endif()
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  list(APPEND GN_GEN_ARGS is_debug=true)
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-windows.cmake)
+elseif(APPLE)
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-macos.cmake)
 else()
-  list(APPEND GN_GEN_ARGS is_debug=false)
-endif()
-if (APPLE)
-  list(APPEND GN_GEN_ARGS
-    use_custom_libcxx=false
-    use_custom_libcxx_for_host=false
-  )
-  if (WEBRTC_MODERN_APPLE_COMPAT)
-    list(APPEND GN_GEN_ARGS
-      treat_warnings_as_errors=false
-      fatal_linker_warnings=false
-    )
-  endif()
-  if (WEBRTC_USE_SYSTEM_XCODE_CLANG)
-    if (DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
-      set(apple_clang_base_path "$ENV{DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr")
-    else()
-      execute_process(
-        COMMAND xcrun --find clang
-        OUTPUT_VARIABLE apple_clang_path
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE apple_clang_result
-      )
-      if (apple_clang_result EQUAL 0)
-        get_filename_component(apple_clang_bin_dir "${apple_clang_path}" DIRECTORY)
-        get_filename_component(apple_clang_base_path "${apple_clang_bin_dir}" DIRECTORY)
-      endif()
-    endif()
-    if (apple_clang_base_path)
-      list(APPEND GN_GEN_ARGS
-        clang_base_path="${apple_clang_base_path}"
-        clang_use_chrome_plugins=false
-      )
-    endif()
-  endif()
-endif()
-if (APPLE AND DEFINED ENV{SDKROOT} AND NOT "$ENV{SDKROOT}" STREQUAL "")
-  list(APPEND GN_GEN_ARGS mac_sdk_path="$ENV{SDKROOT}")
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-linux.cmake)
 endif()
 string(REPLACE ";" " " GN_GEN_ARGS "${GN_GEN_ARGS}")
 

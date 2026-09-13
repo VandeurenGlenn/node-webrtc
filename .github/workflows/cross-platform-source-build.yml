@@ -33,12 +33,27 @@ jobs:
           - os: ubuntu-latest
             node: 26
             generator: Ninja
+            webrtc_config: cmake/webrtc-linux.cmake
+            script_suffix: sh
+            platform_patch_1: cmake/webrtc-linux.cmake
+            platform_patch_2: cmake/webrtc-linux.cmake
+            legacy_artifact: libwebrtc-Linux-X64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-ubuntu24
           - os: windows-2022
             node: 26
             generator: Ninja
+            webrtc_config: cmake/webrtc-windows.cmake
+            script_suffix: bat
+            platform_patch_1: scripts/patch-webrtc-windows.py
+            platform_patch_2: scripts/patch-webrtc-windows.py
+            legacy_artifact: ""
           - os: macos-latest
             node: 26
             generator: Ninja
+            webrtc_config: cmake/webrtc-macos.cmake
+            script_suffix: sh
+            platform_patch_1: scripts/patch-webrtc-apple-clt.py
+            platform_patch_2: scripts/patch-webrtc-apple-clt-modern.py
+            legacy_artifact: libwebrtc-macOS-ARM64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-macos26
 
     steps:
       - name: Checkout
@@ -95,13 +110,24 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_BASE: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'scripts/download-webrtc.*', 'scripts/configure-webrtc.*', 'scripts/build-webrtc.*', 'scripts/patch-webrtc-*', 'scripts/stage-webrtc-prebuilt.js') }}
+          ARTIFACT_BASE: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
+          LEGACY_ARTIFACT_NAME: ${{ matrix.legacy_artifact }}
         run: |
           ARTIFACT_NAME="$ARTIFACT_BASE-${ImageOS:-unknown}"
           run_id="$(
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
               --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
           )"
+          if [ -z "$run_id" ] && [ -n "$LEGACY_ARTIFACT_NAME" ]; then
+            run_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$LEGACY_ARTIFACT_NAME&per_page=100" \
+                --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+            )"
+            if [ -n "$run_id" ]; then
+              ARTIFACT_NAME="$LEGACY_ARTIFACT_NAME"
+              echo "Using verified legacy artifact while platform-specific keys are bootstrapped"
+            fi
+          fi
           echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
           if [ -n "$run_id" ]; then
