@@ -13,7 +13,7 @@ const headerExtensions = new Set([
 
 function copyFile(from, to) {
   mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to);
+  cpSync(from, to, { dereference: true });
 }
 
 function copyHeaders(directory) {

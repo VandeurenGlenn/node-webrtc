@@ -6,6 +6,8 @@ find_package(Git REQUIRED)
 find_package(Threads REQUIRED)
 find_program(iwyu_path OPTIONAL NAMES include-what-you-use iwyu)
 find_program(clang_tidy_path OPTIONAL NAMES clang-tidy)
+option(WRTC_ENABLE_IWYU "Run include-what-you-use while compiling the addon" OFF)
+option(WRTC_ENABLE_CLANG_TIDY "Run clang-tidy while compiling the addon" OFF)
 
 set(WEBRTC_PREBUILT_DEFAULT OFF)
 if(DEFINED ENV{WEBRTC_PREBUILT} AND "$ENV{WEBRTC_PREBUILT}" STREQUAL "1")
@@ -249,11 +251,11 @@ else()
   )
 endif()
 
-if(NOT iwyu_path STREQUAL "iwyu_path-NOTFOUND")
+if(WRTC_ENABLE_IWYU AND NOT iwyu_path STREQUAL "iwyu_path-NOTFOUND")
   set_property(TARGET ${MODULE} PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_path} -Xiwyu --mapping_file=${CMAKE_SOURCE_DIR}/.iwyu.imp)
 endif()
 
-if(NOT clang_tidy_path STREQUAL "clang_tidy_path-NOTFOUND")
+if(WRTC_ENABLE_CLANG_TIDY AND NOT clang_tidy_path STREQUAL "clang_tidy_path-NOTFOUND")
   set_property(TARGET ${MODULE} PROPERTY CXX_CLANG_TIDY ${clang_tidy_path})
 endif()
 

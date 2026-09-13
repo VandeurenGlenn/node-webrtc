@@ -37,7 +37,7 @@ jobs:
             script_suffix: sh
             platform_patch_1: cmake/webrtc-linux.cmake
             platform_patch_2: cmake/webrtc-linux.cmake
-            legacy_artifact: libwebrtc-Linux-X64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-ubuntu24
+            legacy_artifact: ""
           - os: windows-2022
             node: 26
             generator: Ninja

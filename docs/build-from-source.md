@@ -9,6 +9,9 @@ Documentation-only pull requests skip the native build matrix. Set
 `build/external/libwebrtc`; normal local builds should leave it unset.
 Downloaded artifacts recreate the `download/webrtc` source alias because GitHub
 Artifacts does not preserve the checkout's symbolic link.
+Static-analysis tools discovered on the runner are not enabled implicitly.
+Configure with `WRTC_ENABLE_CLANG_TIDY=ON` or `WRTC_ENABLE_IWYU=ON` when those
+developer checks are wanted; normal builds keep them off.
 
 node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
 [node-cmake](https://github.com/cjntaylor/node-cmake).
