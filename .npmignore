@@ -1,0 +1,17 @@
+build/
+benchmarks/
+test/
+
+.circleci/
+.github/
+.gitmodules
+.clang-tidy
+.eslintrc
+.iwyu.imp
+.travis.yml
+appveyor.yml
+
+docs/
+package-lock.json
+tsconfig.json
+*.tgz
