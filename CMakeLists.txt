@@ -101,6 +101,7 @@ if(WIN32)
 endif()
 if (UNIX AND NOT APPLE)
   list(APPEND GN_GEN_ARGS
+    use_thin_lto=false
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     use_sysroot=false
@@ -309,12 +310,12 @@ add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
 if(MSVC)
-  target_compile_options(${MODULE} PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h>"
+  set_source_files_properties(${MODULE_SRC} PROPERTIES
+    COMPILE_OPTIONS "/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h"
   )
 else()
-  target_compile_options(${MODULE} PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_SOURCE_DIR}/src/webrtc/compat.h>"
+  set_source_files_properties(${MODULE_SRC} PROPERTIES
+    COMPILE_OPTIONS "-include${CMAKE_SOURCE_DIR}/src/webrtc/compat.h"
   )
 endif()
 
