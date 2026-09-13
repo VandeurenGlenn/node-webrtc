@@ -68,8 +68,17 @@ jobs:
               throw "$command was not found on PATH"
             }
           }
+          $resourceCompiler = Get-ChildItem `
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $resourceCompiler) {
+            throw 'The Windows SDK resource compiler was not found'
+          }
           "vs2022_install=$installPath" >> $env:GITHUB_ENV
+          "RC=$resourceCompiler" >> $env:GITHUB_ENV
           Write-Host "Using Visual Studio SDK from $installPath with clang-cl, lld-link, and Ninja"
+          Write-Host "Using Windows resource compiler $resourceCompiler"
 
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
