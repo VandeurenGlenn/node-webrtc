@@ -186,9 +186,7 @@ endif()
 if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
-    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj
-    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj
-    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj
+    ${libwebrtc_binary_dir}/obj/node_webrtc_extras.lib
   )
 elseif(UNIX)
   set(byproducts
@@ -233,22 +231,26 @@ set(libwebrtc_binary_dir "${BINARY_DIR}")
 
 add_library(libwebrtc STATIC IMPORTED)
 add_dependencies(libwebrtc project_libwebrtc)
-add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
-add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
-add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
-add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
-  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj")
-  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
-    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj"
-  )
+  add_library(libwebrtc_node_extras STATIC IMPORTED)
+  add_dependencies(libwebrtc_node_extras project_libwebrtc)
+  set_property(TARGET libwebrtc_node_extras PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/node_webrtc_extras.lib")
+  set(libwebrtc_platform_extras libwebrtc_node_extras)
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
+  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
+  add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
   set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
+  add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
+  add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
   set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
     "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o"
+  )
+  set(libwebrtc_platform_extras
+    libwebrtc_adapted_video_track_source
+    libwebrtc_builtin_video_codec_factories
   )
 endif()
 
@@ -362,8 +364,7 @@ target_include_directories(${MODULE} PRIVATE
 target_link_libraries(${MODULE} PRIVATE
   ${CMAKE_THREAD_LIBS_INIT}
   libwebrtc
-  libwebrtc_adapted_video_track_source
-  libwebrtc_builtin_video_codec_factories
+  ${libwebrtc_platform_extras}
 )
 
 target_compile_definitions(${MODULE} PRIVATE
