@@ -6,7 +6,7 @@ set PATH=%DEPOT_TOOLS%;%PATH%
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 ECHO ninja
-call ninja webrtc node_webrtc_extras -j 2
+call ninja webrtc node_webrtc_extras
 IF %ERRORLEVEL% NEQ 0 GOTO ERROR
 
 GOTO DONE

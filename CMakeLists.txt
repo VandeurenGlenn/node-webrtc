@@ -7,6 +7,12 @@ find_package(Threads REQUIRED)
 find_program(iwyu_path OPTIONAL NAMES include-what-you-use iwyu)
 find_program(clang_tidy_path OPTIONAL NAMES clang-tidy)
 
+set(WEBRTC_PREBUILT_DEFAULT OFF)
+if(DEFINED ENV{WEBRTC_PREBUILT} AND "$ENV{WEBRTC_PREBUILT}" STREQUAL "1")
+  set(WEBRTC_PREBUILT_DEFAULT ON)
+endif()
+option(WEBRTC_PREBUILT "Use a previously built libwebrtc tree" ${WEBRTC_PREBUILT_DEFAULT})
+
 set(
   DEPOT_TOOLS_REVISION
   81577f19a8497ba7e41afac322e8f03553a863ec
@@ -17,6 +23,7 @@ set(
 # depot_tools
 # -----------------------------------------------------------------------------
 
+if(NOT WEBRTC_PREBUILT)
 ExternalProject_Add(
   project_depot_tools
 
@@ -37,6 +44,7 @@ ExternalProject_Add(
 
 ExternalProject_Get_Property(project_depot_tools SOURCE_DIR)
 set(depot_tools_install_dir ${SOURCE_DIR})
+endif()
 
 set(libwebrtc_binary_dir ${CMAKE_BINARY_DIR}/external/libwebrtc/build/${CMAKE_BUILD_TYPE})
 set(libwebrtc_src_dir ${CMAKE_BINARY_DIR}/external/libwebrtc/download/src)
@@ -95,6 +103,7 @@ if(WIN32)
   # cannot consume LLVM ThinLTO members from WebRTC's static libraries.
   list(APPEND GN_GEN_ARGS
     use_thin_lto=false
+    use_thin_archives=false
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     treat_warnings_as_errors=false
@@ -104,6 +113,7 @@ endif()
 if (UNIX AND NOT APPLE)
   list(APPEND GN_GEN_ARGS
     use_thin_lto=false
+    use_thin_archives=false
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     use_sysroot=false
@@ -202,6 +212,7 @@ else()
   )
 endif()
 
+if(NOT WEBRTC_PREBUILT)
 ExternalProject_Add(
   project_libwebrtc
 
@@ -228,23 +239,37 @@ set(libwebrtc_source_dir "${DOWNLOAD_DIR}")
 
 ExternalProject_Get_Property(project_libwebrtc BINARY_DIR)
 set(libwebrtc_binary_dir "${BINARY_DIR}")
+else()
+  if(NOT EXISTS "${libwebrtc_src_dir}" OR NOT EXISTS "${libwebrtc_binary_dir}")
+    message(FATAL_ERROR "WEBRTC_PREBUILT requires build/external/libwebrtc/download/src and build/external/libwebrtc/build/${CMAKE_BUILD_TYPE}")
+  endif()
+  set(libwebrtc_source_dir "${CMAKE_BINARY_DIR}/external/libwebrtc/download")
+endif()
 
 add_library(libwebrtc STATIC IMPORTED)
-add_dependencies(libwebrtc project_libwebrtc)
+if(TARGET project_libwebrtc)
+  add_dependencies(libwebrtc project_libwebrtc)
+endif()
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
   add_library(libwebrtc_node_extras STATIC IMPORTED)
-  add_dependencies(libwebrtc_node_extras project_libwebrtc)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_node_extras project_libwebrtc)
+  endif()
   set_property(TARGET libwebrtc_node_extras PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/node_webrtc_extras.lib")
   set(libwebrtc_platform_extras libwebrtc_node_extras)
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
   add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
-  add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+  endif()
   set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
   add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
-  add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
+  endif()
   set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
     "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o"
   )

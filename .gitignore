@@ -2,6 +2,7 @@
 *.swp
 .idea
 .DS_Store
+.webrtc-prebuilt
 build
 example
 node_modules

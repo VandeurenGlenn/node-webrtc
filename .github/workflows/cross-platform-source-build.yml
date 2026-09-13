@@ -5,11 +5,15 @@ on:
   pull_request:
     branches:
       - develop
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   push:
     tags:
       - "v*"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -72,15 +76,35 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
-      - name: Cache WebRTC checkout
-        uses: actions/cache@v6
+      - name: Find matching WebRTC prebuilt
+        id: prebuilt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_BASE: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'scripts/download-webrtc.*', 'scripts/configure-webrtc.*', 'scripts/build-webrtc.*', 'scripts/patch-webrtc-*', 'scripts/stage-webrtc-prebuilt.js') }}
+        run: |
+          ARTIFACT_NAME="$ARTIFACT_BASE-${ImageOS:-unknown}"
+          run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+          )"
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          if [ -n "$run_id" ]; then
+            echo "Found $ARTIFACT_NAME in run $run_id"
+          else
+            echo "No matching prebuilt; this job will perform a full WebRTC build"
+          fi
+
+      - name: Download matching WebRTC prebuilt
+        if: steps.prebuilt.outputs.run-id != ''
+        uses: actions/download-artifact@v7
         with:
-          path: |
-            build/external/depot_tools/src
-            build/external/libwebrtc/download
-          key: webrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('CMakeLists.txt', 'scripts/download-webrtc.*', 'scripts/configure-webrtc.*', 'scripts/patch-webrtc-*') }}
-          restore-keys: |
-            webrtc-${{ runner.os }}-${{ runner.arch }}-
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: build/external/libwebrtc
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.prebuilt.outputs.run-id }}
+          github-token: ${{ github.token }}
 
       - name: Install package dependencies
         run: npm install --ignore-scripts
@@ -89,7 +113,22 @@ jobs:
         env:
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
+          WEBRTC_PREBUILT: ${{ steps.prebuilt.outputs.run-id != '' && '1' || '0' }}
         run: npm run build
+
+      - name: Stage WebRTC prebuilt
+        if: steps.prebuilt.outputs.run-id == ''
+        run: node scripts/stage-webrtc-prebuilt.js
+
+      - name: Preserve WebRTC prebuilt
+        if: steps.prebuilt.outputs.run-id == ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: .webrtc-prebuilt/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
 
       - name: Smoke load addon
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"

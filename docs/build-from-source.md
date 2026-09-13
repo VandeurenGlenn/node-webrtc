@@ -1,5 +1,12 @@
 # Build from Source
 
+Pull-request CI reuses platform-specific, pinned libwebrtc artifacts when the
+WebRTC revision and build inputs are unchanged. Changes to CMake or the WebRTC
+download, configure, build, or patch scripts automatically force a full rebuild.
+Documentation-only pull requests skip the native build matrix. Set
+`WEBRTC_PREBUILT=1` only when the matching tree is already present below
+`build/external/libwebrtc`; normal local builds should leave it unset.
+
 node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
 [node-cmake](https://github.com/cjntaylor/node-cmake).
 
