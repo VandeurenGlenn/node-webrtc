@@ -187,11 +187,15 @@ if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
     ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj
   )
 elseif(UNIX)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/libwebrtc.a
     ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o
   )
 else()
   set(byproducts
@@ -231,13 +235,21 @@ add_library(libwebrtc STATIC IMPORTED)
 add_dependencies(libwebrtc project_libwebrtc)
 add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
 add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
+add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
   set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj")
+  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
+    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj"
+  )
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
   set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
+  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
+    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o"
+  )
 endif()
 
 # NOTE(mroberts): I would like this to be INTERFACE.
@@ -351,6 +363,7 @@ target_link_libraries(${MODULE} PRIVATE
   ${CMAKE_THREAD_LIBS_INIT}
   libwebrtc
   libwebrtc_adapted_video_track_source
+  libwebrtc_builtin_video_codec_factories
 )
 
 target_compile_definitions(${MODULE} PRIVATE
@@ -361,10 +374,9 @@ target_compile_definitions(${MODULE} PRIVATE
 if(WIN32)
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /GR-")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /GR- -D_HAS_ITERATOR_DEBUGGING=0")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /FORCE:UNRESOLVED")
-
   target_link_libraries(${MODULE} PRIVATE
     dmoguids.lib
+    iphlpapi.lib
     msdmo.lib
     secur32.lib
     winmm.lib
