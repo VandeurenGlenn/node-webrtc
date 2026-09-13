@@ -91,8 +91,10 @@ endif()
 
 if(WIN32)
   # Build WebRTC with its bundled clang-cl while keeping the MSVC STL ABI used
-  # by the Node addon. Modern compiler-rt sources are not accepted by cl.exe.
+  # by the Node addon. Emit regular COFF objects because Visual Studio link.exe
+  # cannot consume LLVM ThinLTO members from WebRTC's static libraries.
   list(APPEND GN_GEN_ARGS
+    use_thin_lto=false
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     treat_warnings_as_errors=false
