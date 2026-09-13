@@ -99,11 +99,10 @@ endif()
 
 if(WIN32)
   # Build WebRTC with its bundled clang-cl while keeping the MSVC STL ABI used
-  # by the Node addon. Emit regular COFF objects because Visual Studio link.exe
-  # cannot consume LLVM ThinLTO members from WebRTC's static libraries.
+  # by the Node addon. ThinLTO remains disabled so the resulting archive can be
+  # consumed by the addon's clang-cl/lld-link toolchain.
   list(APPEND GN_GEN_ARGS
     use_thin_lto=false
-    use_thin_archives=false
     use_custom_libcxx=false
     use_custom_libcxx_for_host=false
     treat_warnings_as_errors=false
@@ -409,6 +408,10 @@ if(WIN32)
     wmcodecdspuuid.lib
     ws2_32.lib
   )
+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_link_options(${MODULE} PRIVATE -fuse-ld=lld)
+  endif()
 
   target_compile_definitions(${MODULE} PRIVATE
     -D_WINSOCKAPI_

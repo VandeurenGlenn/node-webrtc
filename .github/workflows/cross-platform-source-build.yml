@@ -35,7 +35,7 @@ jobs:
             generator: Ninja
           - os: windows-2022
             node: 26
-            generator: Visual Studio 17 2022
+            generator: Ninja
           - os: macos-latest
             node: 26
             generator: Ninja
@@ -63,8 +63,13 @@ jobs:
           if (-not $installPath) {
             throw 'Visual Studio 2022 with C++ build tools was not found'
           }
+          foreach ($command in 'clang-cl', 'lld-link', 'ninja') {
+            if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+              throw "$command was not found on PATH"
+            }
+          }
           "vs2022_install=$installPath" >> $env:GITHUB_ENV
-          Write-Host "Using Visual Studio from $installPath"
+          Write-Host "Using Visual Studio SDK from $installPath with clang-cl, lld-link, and Ninja"
 
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
@@ -113,6 +118,7 @@ jobs:
         env:
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
+          USE_CLANG_CL: 1
           WEBRTC_PREBUILT: ${{ steps.prebuilt.outputs.run-id != '' && '1' || '0' }}
         run: npm run build
 

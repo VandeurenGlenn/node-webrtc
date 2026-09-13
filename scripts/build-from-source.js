@@ -27,6 +27,10 @@ if (generator) {
 }
 
 const buildEnv = { ...process.env };
+if (process.platform === "win32" && process.env.USE_CLANG_CL === "1") {
+  buildEnv.CC = "clang-cl";
+  buildEnv.CXX = "clang-cl";
+}
 if (process.platform === "linux") {
   const disableAvailability = "-D_LIBCPP_DISABLE_AVAILABILITY";
   const cxxflags = buildEnv.CXXFLAGS || "";

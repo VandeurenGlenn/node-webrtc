@@ -17,7 +17,8 @@ All platforms require Git, CMake, Node.js, and npm. In addition, install:
 * Linux: Ninja and the standard C++ development packages.
 * macOS: Xcode Command Line Tools and Ninja.
 * Windows: Microsoft Visual Studio 2022 with the Desktop development with C++
-  workload.
+  workload. CI compiles the addon with `clang-cl` and links with `lld-link`,
+  matching the LLVM archive format produced by WebRTC M152.
 
 The build downloads the matching Chromium `depot_tools`, WebRTC source, and
 WebRTC compiler toolchain automatically. The first build is consequently much
