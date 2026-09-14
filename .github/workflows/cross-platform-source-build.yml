@@ -44,7 +44,7 @@ jobs:
             webrtc_config: cmake/webrtc-windows.cmake
             script_suffix: bat
             platform_patch_1: scripts/patch-webrtc-windows.py
-            platform_patch_2: scripts/patch-webrtc-windows.py
+            platform_patch_2: scripts/patch-webrtc-boringssl-prefix.py
             legacy_artifact: ""
           - os: macos-latest
             node: 26
@@ -162,11 +162,12 @@ jobs:
         run: npm run build
 
       - name: Stage WebRTC prebuilt
-        if: steps.prebuilt.outputs.run-id == ''
+        id: stage-prebuilt
+        if: always() && steps.prebuilt.outputs.run-id == ''
         run: node scripts/stage-webrtc-prebuilt.js
 
       - name: Preserve WebRTC prebuilt
-        if: steps.prebuilt.outputs.run-id == ''
+        if: always() && steps.prebuilt.outputs.run-id == '' && steps.stage-prebuilt.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prebuilt.outputs.name }}

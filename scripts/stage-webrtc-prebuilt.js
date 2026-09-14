@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 
 const root = resolve(process.cwd());
@@ -13,14 +13,19 @@ const headerExtensions = new Set([
 
 function copyFile(from, to) {
   mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to, { dereference: true });
+  copyFileSync(from, to);
 }
 
 function copyHeaders(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === ".git") continue;
     const from = join(directory, entry.name);
+    const sourceRelative = relative(source, from).replaceAll("\\", "/");
     if (entry.isDirectory()) {
+      if (sourceRelative === "third_party/llvm-build" ||
+          (sourceRelative.startsWith("build/linux/") && sourceRelative.includes("sysroot"))) {
+        continue;
+      }
       copyHeaders(from);
     } else if (entry.isFile() && headerExtensions.has(extname(entry.name))) {
       copyFile(from, join(output, "download/src", relative(source, from)));

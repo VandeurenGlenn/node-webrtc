@@ -14,6 +14,11 @@ if [ ! -d "$webrtc_dir" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
     "$python_bin" "$script_dir/patch-webrtc-apple-clt-modern.py" "$1"
   fi
+  case "$(uname -s)" in
+    CYGWIN*|MINGW*|MSYS*)
+      "$python_bin" "$script_dir/patch-webrtc-boringssl-prefix.py" "$1"
+      ;;
+  esac
   exit 0
 fi
 

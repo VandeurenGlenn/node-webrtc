@@ -309,10 +309,6 @@ if(WIN32)
     ws2_32.lib
   )
 
-  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_link_options(${MODULE} PRIVATE -fuse-ld=lld)
-  endif()
-
   target_compile_definitions(${MODULE} PRIVATE
     -D_WINSOCKAPI_
     -DINCL_EXTRA_HTON_FUNCTIONS

@@ -12,6 +12,8 @@ Artifacts does not preserve the checkout's symbolic link.
 Static-analysis tools discovered on the runner are not enabled implicitly.
 Configure with `WRTC_ENABLE_CLANG_TIDY=ON` or `WRTC_ENABLE_IWYU=ON` when those
 developer checks are wanted; normal builds keep them off.
+CI preserves a completed libwebrtc build even if the later addon compile or
+link step fails, so follow-up fixes do not repeat the dependency build.
 
 node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
 [node-cmake](https://github.com/cjntaylor/node-cmake).
@@ -27,6 +29,8 @@ All platforms require Git, CMake, Node.js, and npm. In addition, install:
   matching the LLVM archive format produced by WebRTC M152. The Windows SDK
   resource compiler is pinned explicitly so npm's unrelated `rc` executable
   cannot shadow `rc.exe`.
+  The bundled BoringSSL symbols receive a `node_webrtc` prefix on Windows to
+  avoid collisions with the OpenSSL symbols exported by Node itself.
 
 The build downloads the matching Chromium `depot_tools`, WebRTC source, and
 WebRTC compiler toolchain automatically. The first build is consequently much
