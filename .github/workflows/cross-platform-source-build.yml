@@ -138,20 +138,23 @@ jobs:
 
       - name: Download matching WebRTC prebuilt
         if: steps.prebuilt.outputs.run-id != ''
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ steps.prebuilt.outputs.name }}
-          path: build/external/libwebrtc
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.prebuilt.outputs.run-id }}
-          github-token: ${{ github.token }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ steps.prebuilt.outputs.name }}
+          ARTIFACT_RUN_ID: ${{ steps.prebuilt.outputs.run-id }}
+        run: |
+          gh run download "$ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir build/external/libwebrtc
 
       - name: Prepare WebRTC prebuilt layout
         if: steps.prebuilt.outputs.run-id != ''
         run: node scripts/prepare-webrtc-prebuilt.js
 
       - name: Install package dependencies
-        run: npm install --ignore-scripts
+        run: npm install --ignore-scripts --omit=dev
 
       - name: Build from source
         env:

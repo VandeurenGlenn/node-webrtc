@@ -210,24 +210,9 @@ void RTCPeerConnection::OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInte
 void RTCPeerConnection::OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface>) {
 }
 
-void RTCPeerConnection::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
-    const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>& streams) {
-  if (_jinglePeerConnection->GetConfiguration().sdp_semantics != webrtc::SdpSemantics::kPlanB) {
-    return;
-  }
-  Dispatch(CreateCallback<RTCPeerConnection>([this, receiver, streams]() {
-    auto mediaStreams = std::vector<MediaStream*>();
-    for (auto const& stream : streams) {
-      auto mediaStream = MediaStream::wrap()->GetOrCreate(_factory, stream);
-      mediaStreams.push_back(mediaStream);
-    }
-    CONVERT_OR_THROW_AND_RETURN_VOID_NAPI(Env(), mediaStreams, streamArray, Napi::Value)
-    MakeCallback("ontrack", {
-      RTCRtpReceiver::wrap()->GetOrCreate(_factory, receiver)->Value(),
-      streamArray,
-      Env().Null()
-    });
-  }));
+void RTCPeerConnection::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface>,
+    const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>&) {
+  // Legacy Plan B callback. Unified Plan delivers tracks through OnTrack.
 }
 
 void RTCPeerConnection::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) {

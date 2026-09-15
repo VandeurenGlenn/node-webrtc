@@ -21,13 +21,13 @@
 #include <webrtc/modules/audio_device/include/audio_device_defines.h>
 #include <webrtc/rtc_base/buffer.h>
 #include <webrtc/rtc_base/checks.h>
-#include <webrtc/rtc_base/deprecated/recursive_critical_section.h>
 #include <webrtc/rtc_base/event.h>
 #include <webrtc/rtc_base/logging.h>
 #include <webrtc/rtc_base/numerics/safe_conversions.h>
 #include <webrtc/rtc_base/platform_thread.h>
 #include <webrtc/rtc_base/random.h>
 #include <webrtc/rtc_base/ref_counted_object.h>
+#include <webrtc/rtc_base/synchronization/mutex.h>
 #include <webrtc/rtc_base/thread.h>
 #include <webrtc/rtc_base/thread_annotations.h>
 #include <webrtc/rtc_base/time_utils.h>
@@ -84,7 +84,7 @@ class TestAudioDeviceModuleImpl  // NOLINT
     StopRecording();  // NOLINT
     if (thread_) {
       {
-        rtc::CritScope cs(&lock_);
+        webrtc::MutexLock lock(&lock_);
         stop_thread_ = true;
       }
       thread_->Stop();
@@ -101,14 +101,14 @@ class TestAudioDeviceModuleImpl  // NOLINT
   }
 
   int32_t RegisterAudioCallback(webrtc::AudioTransport* callback) override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     RTC_DCHECK(callback || audio_callback_);
     audio_callback_ = callback;
     return 0;
   }
 
   int32_t StartPlayout() override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     RTC_CHECK(renderer_);
     rendering_ = true;
     done_rendering_.Reset();
@@ -116,14 +116,14 @@ class TestAudioDeviceModuleImpl  // NOLINT
   }
 
   int32_t StopPlayout() override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     rendering_ = false;
     done_rendering_.Set();
     return 0;
   }
 
   int32_t StartRecording() override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     RTC_CHECK(capturer_);
     capturing_ = true;
     done_capturing_.Reset();
@@ -131,19 +131,19 @@ class TestAudioDeviceModuleImpl  // NOLINT
   }
 
   int32_t StopRecording() override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     capturing_ = false;
     done_capturing_.Set();
     return 0;
   }
 
   bool Playing() const override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     return rendering_;
   }
 
   bool Recording() const override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     return capturing_;
   }
 
@@ -165,7 +165,7 @@ class TestAudioDeviceModuleImpl  // NOLINT
     bool logged_once = false;
     for (;;) {
       {
-        rtc::CritScope cs(&lock_);
+        webrtc::MutexLock lock(&lock_);
         if (stop_thread_) {
           return;
         }
@@ -240,7 +240,7 @@ class TestAudioDeviceModuleImpl  // NOLINT
   const std::unique_ptr<Renderer> renderer_ RTC_GUARDED_BY(lock_);
   const int64_t process_interval_us_;
 
-  rtc::RecursiveCriticalSection lock_;
+  mutable webrtc::Mutex lock_;
   webrtc::AudioTransport* audio_callback_ RTC_GUARDED_BY(lock_);
   bool rendering_ RTC_GUARDED_BY(lock_);
   bool capturing_ RTC_GUARDED_BY(lock_);
@@ -279,7 +279,7 @@ class PulsedNoiseCapturerImpl final
     fill_with_zero_ = !fill_with_zero_;
     int16_t max_amplitude;
     {
-      rtc::CritScope cs(&lock_);
+      webrtc::MutexLock lock(&lock_);
       max_amplitude = max_amplitude_;
     }
     buffer->SetData(
@@ -299,7 +299,7 @@ class PulsedNoiseCapturerImpl final
   }
 
   void SetMaxAmplitude(int16_t amplitude) override {
-    rtc::CritScope cs(&lock_);
+    webrtc::MutexLock lock(&lock_);
     max_amplitude_ = amplitude;
   }
 
@@ -307,7 +307,7 @@ class PulsedNoiseCapturerImpl final
   int sampling_frequency_in_hz_;
   bool fill_with_zero_;
   webrtc::Random random_generator_;
-  rtc::RecursiveCriticalSection lock_;
+  webrtc::Mutex lock_;
   int16_t max_amplitude_ RTC_GUARDED_BY(lock_);
   const int num_channels_;
 };

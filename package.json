@@ -29,16 +29,12 @@
     ]
   },
   "engines": {
-    "node": "^8.11.2 || >=10.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mapbox/node-pre-gyp": "^1.0.4",
-    "node-addon-api": "^1.6.2",
-    "node-cmake": "2.3.2",
-    "node-pre-gyp": "^0.17.0"
-  },
-  "optionalDependencies": {
-    "domexception": "^1.0.1"
+    "@mapbox/node-pre-gyp": "^2.0.3",
+    "node-addon-api": "^8.9.2",
+    "node-cmake": "2.5.1"
   },
   "bundledDependencies": [
     "@mapbox/node-pre-gyp"
@@ -100,7 +96,7 @@
     "install": "node scripts/download-prebuilt-or-build-from-source.js",
     "install-example": "node scripts/install-example.js",
     "lint": "eslint lib/*.js lib/**/*.js test/*.js test/**/*.js karma/*.js scripts/*.js",
-    "node-pre-gyp-package": "rimraf build/Release/obj.target && rimraf build/Release/.deps && node-pre-gyp package",
+    "node-pre-gyp-package": "node scripts/clean-package-build.js && node-pre-gyp package",
     "prenode-pre-gyp-publish": "npm run node-pre-gyp-package -- --target_arch=$TARGET_ARCH",
     "node-pre-gyp-publish": "node ./install/publish publish",
     "test": "node --expose-gc test/all.js",
