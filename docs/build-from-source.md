@@ -1,135 +1,107 @@
 # Build from Source
 
+Pull-request CI reuses platform-specific, pinned libwebrtc artifacts when the
+WebRTC revision and relevant platform build inputs are unchanged. Shared changes
+invalidate all platforms; platform-specific CMake, download, configure, build,
+or patch changes invalidate only that platform's artifact.
+Documentation-only pull requests skip the native build matrix. Set
+`WEBRTC_PREBUILT=1` only when the matching tree is already present below
+`build/external/libwebrtc`; normal local builds should leave it unset.
+Downloaded artifacts recreate the `download/webrtc` source alias because GitHub
+Artifacts does not preserve the checkout's symbolic link.
+Static-analysis tools discovered on the runner are not enabled implicitly.
+Configure with `WRTC_ENABLE_CLANG_TIDY=ON` or `WRTC_ENABLE_IWYU=ON` when those
+developer checks are wanted; normal builds keep them off.
+CI preserves a completed libwebrtc build even if the later addon compile or
+link step fails, so follow-up fixes do not repeat the dependency build.
+
+node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
+[node-cmake](https://github.com/cjntaylor/node-cmake).
+
 ## Prerequisites
 
-node-webrtc uses [node-cmake](https://github.com/cjntaylor/node-cmake) to build
-from source. When building from source, in addition to the prerequisites
-required by node-cmake, you will need
+All platforms require Git, CMake, Node.js, and npm. In addition, install:
 
-* Git
-* CMake 3.12 or newer
-* GCC 5.4 or newer (Linux)
-* Xcode 9 or newer (macOS)
-* Microsoft Visual Studio 2019 (Windows)
-* Check the [additional prerequisites listed by WebRTC](https://webrtc.github.io/webrtc-org/native-code/development/prerequisite-sw/) - although their install is automated by the CMake scripts provided
+* Linux: Ninja and the standard C++ development packages.
+* macOS: Xcode Command Line Tools and Ninja.
+* Windows: Microsoft Visual Studio 2022 with the Desktop development with C++
+  workload. CI compiles the addon with `clang-cl` and links with `lld-link`,
+  matching the LLVM archive format produced by WebRTC M152. The Windows SDK
+  resource compiler is pinned explicitly so npm's unrelated `rc` executable
+  cannot shadow `rc.exe`.
+  The bundled BoringSSL symbols receive a `node_webrtc` prefix on Windows to
+  avoid collisions with the OpenSSL symbols exported by Node itself.
 
+The build downloads the matching Chromium `depot_tools`, WebRTC source, and
+WebRTC compiler toolchain automatically. The first build is consequently much
+slower than subsequent builds.
 
-## Install
+## Build
 
-Once you have the prerequisites, clone the repository, set the `SKIP_DOWNLOAD`
-environment variable to "true", and run `npm install`. Just like when
-installing prebuilt binaries, you can set the `TARGET_ARCH` environment
-variable to "arm" or "arm64" to build for armv7l or arm64, respectively. Linux
-and macOS users can also set the `DEBUG` environment variable for debug builds.
+Clone this repository, install package dependencies without running the package
+install hook, and start the source build:
 
-```
-git clone https://github.com/node-webrtc/node-webrtc.git
+```sh
+git clone https://github.com/VandeurenGlenn/node-webrtc.git
 cd node-webrtc
-SKIP_DOWNLOAD=true npm install
+npm install --ignore-scripts
+npm run build
 ```
 
-Note: Use `$SKIP_DOWNLOAD = 'true'; npm install` on Windows Powershell.
+Use `npm run build` again for subsequent incremental builds. The WebRTC checkout
+below `build/external/libwebrtc/download` is reused when its pinned revision and
+build inputs have not changed.
 
-## Subsequent Builds
+Set `DEBUG=1` for a debug build. `TARGET_ARCH=arm` and `TARGET_ARCH=arm64` select
+the corresponding Linux cross-build targets.
 
-Subsequent builds can be triggered with `ncmake`:
-
-```
-./node_modules/.bin/ncmake configure
-./node_modules/.bin/ncmake build
-```
-
-You can pass either `--debug` or `--release` to build a debug or release build
-of node-webrtc (and the underlying WebRTC library). Refer to
-[node-cmake](https://github.com/cjntaylor/node-cmake) for additional
-command-line options to `ncmake`.
-
-## Other Notes
+## Platform toolchains
 
 ### Linux
 
-On Linux, we statically link libc++ and libc++abi. Also, although we compile
-WebRTC sources with Clang (downloaded as part of WebRTC's build process), we
-compile node-webrtc sources with GCC 5.4 or newer.
+WebRTC is compiled with Chromium's pinned Clang. WebRTC and the Node addon both
+use the system `libstdc++`, preventing C++ ABI mismatches at their boundary.
 
-#### armv7l
-
-In order to cross-compile for armv7l on Linux,
-
-1. Set `TARGET_ARCH` to "arm".
-2. Install the appropriate toolchain, and set `ARM_TOOLS_PATH`.
-3. On Ubuntu, you may also need g++-arm-linux-gnueabihf.
-
-```
-wget https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/arm-linux-gnueabihf/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
-tar xf gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf.tar.xz
-SKIP_DOWNLOAD=true TARGET_ARCH=arm ARM_TOOLS_PATH=$(pwd)/gcc-linaro-7.3.1-2018.05-x86_64_arm-linux-gnueabihf npm install
-```
-
-#### arm64
-
-In order to cross-compile for arm64 on Linux,
-
-1. Set `TARGET_ARCH` to "arm64".
-2. Install the appropriate toolchain, and set `ARM_TOOLS_PATH`.
-3. On Ubuntu, you may also need g++-aarch64-linux-gnu.
-
-```
-wget https://releases.linaro.org/components/toolchain/binaries/7.3-2018.05/aarch64-linux-gnu/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
-tar xf gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
-SKIP_DOWNLOAD=true TARGET_ARCH=arm64 ARM_TOOLS_PATH=$(pwd)/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu npm install
-```
+For Linux cross-builds, install the appropriate cross compiler, set
+`TARGET_ARCH` to `arm` or `arm64`, and set `ARM_TOOLS_PATH` to its root.
 
 ### macOS
 
-On macOS, we statically link libc++ and libc++abi. Also, we compile WebRTC
-sources with the version of Clang downloaded as part of WebRTC's build process,
-but we compile node-webrtc sources using the system Clang.
+WebRTC uses its pinned Clang toolchain and the addon uses Xcode Clang. Both use
+the platform libc++ ABI. The minimum supported SDK is selected automatically.
 
 ### Windows
 
-On Windows, we do not compile WebRTC sources with Clang. This is disabled by
-passing `is_clang=false` to `gn gen`.
+Visual Studio 2022 configures and builds the Node addon. WebRTC itself uses its
+bundled Chromium `clang-cl`; both sides use the Microsoft standard library ABI.
+Run the build from a Visual Studio Developer PowerShell or another shell in
+which the Visual Studio C++ environment is available.
 
-To fix error `Filename too long`, use (optionally with `--global` or `--system` switches to set for more than just this project):
+Long paths may need to be enabled before checking out WebRTC:
 
+```powershell
+git config --global core.longpaths true
 ```
-git config core.longpaths true
-```
 
-Creating symbolic links with MKLINK is used by the build script but is disabled for non-Administrative users by default with a local security policy. On Windows 10, fix this with Run (Windows-R) then `gpedit.msc`. Edit key "Local Computer Policy -> Windows Settings -> Security Settings -> Local Policies -> User Rights Assignment -> Create Symbolic Links" and add your user name. Log out and in to change the policy. Note the [associated security vunerability](https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links#vulnerability).
+## Tests
 
-The Windows SDK debugging tools should be installed. One way to achieve this is to [Download the Windows Driver Kit](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk).
+Run the native unit and integration tests with:
 
-# Test
-
-## Unit & Integration Tests
-
-Once everything is built, run
-
-```
+```sh
 npm test
 ```
 
-## Web Platform Tests
+Run the Web Platform Tests with:
 
-[web-platform-tests/wpt](https://github.com/web-platform-tests/wpt) defines a suite of WebRTC tests. node-webrtc borrows a technique from [jsdom/jsdom](https://github.com/jsdom/jsdom) to run these tests in Node.js. Run the tests with
-
-```
+```sh
+npm run wpt:init
 npm run wpt:test
 ```
 
-## Browser Tests
+The browser-facing test suite can be run with:
 
-These tests are run by Circle CI to ensure node-webrtc remains compatible with
-the latest versions of Chrome and Firefox.
-
-```
+```sh
 npm run test:browsers
 ```
 
-## Electron Test
-
-```
-npm run test:electron
-```
+For benchmark instructions, see [benchmarking.md](benchmarking.md).

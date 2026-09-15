@@ -61,15 +61,15 @@ class Validation {
    * @return the result of applying the Validation
    */
   template <typename F>
-  Validation<typename std::result_of<F(T)>::type> Apply(const Validation<F>& f) const {
+  Validation<std::invoke_result_t<F, T>> Apply(const Validation<F>& f) const {
     if (f.IsInvalid()) {
       auto errors = f.ToErrors();
       errors.insert(errors.end(), _errors.begin(), _errors.end());
-      return Validation<typename std::result_of<F(T)>::type>::Invalid(errors);
+      return Validation<std::invoke_result_t<F, T>>::Invalid(errors);
     } else if (IsInvalid()) {
-      return Validation<typename std::result_of<F(T)>::type>::Invalid(_errors);
+      return Validation<std::invoke_result_t<F, T>>::Invalid(_errors);
     }
-    return Validation<typename std::result_of<F(T)>::type>::Valid(f.UnsafeFromValid()(_value));
+    return Validation<std::invoke_result_t<F, T>>::Valid(f.UnsafeFromValid()(_value));
   }
 
   /**
@@ -130,10 +130,10 @@ class Validation {
    * @return the mapped Validation
    */
   template <typename F>
-  Validation<typename std::result_of<F(T)>::type> Map(F f) const {
+  Validation<std::invoke_result_t<F, T>> Map(F f) const {
     return _is_valid
-        ? Validation<typename std::result_of<F(T)>::type>::Valid(f(_value))
-        : Validation<typename std::result_of<F(T)>::type>::Invalid(_errors);
+        ? Validation<std::invoke_result_t<F, T>>::Valid(f(_value))
+        : Validation<std::invoke_result_t<F, T>>::Invalid(_errors);
   }
 
   /**

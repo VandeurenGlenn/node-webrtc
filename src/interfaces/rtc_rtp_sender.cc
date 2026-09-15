@@ -79,7 +79,7 @@ Napi::Value RTCRtpSender::GetCapabilities(const Napi::CallbackInfo& info) {
   CONVERT_ARGS_OR_THROW_AND_RETURN_NAPI(info, kindString, std::string)
   if (kindString == "audio" || kindString == "video") {
     auto factory = PeerConnectionFactory::GetOrCreateDefault();
-    auto kind = kindString == "audio" ? cricket::MEDIA_TYPE_AUDIO : cricket::MEDIA_TYPE_VIDEO;
+    auto kind = kindString == "audio" ? webrtc::MediaType::AUDIO : webrtc::MediaType::VIDEO;
     auto capabilities = factory->factory()->GetRtpSenderCapabilities(kind);
     factory->Release();
     CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), capabilities, result, Napi::Value)
@@ -124,8 +124,8 @@ Napi::Value RTCRtpSender::ReplaceTrack(const Napi::CallbackInfo& info) {
   auto track = mediaStreamTrack ? mediaStreamTrack->track().get() : nullptr;
   if (track) {
     auto expectedMediaType = track->kind() == webrtc::MediaStreamTrackInterface::kAudioKind
-        ? cricket::MediaType::MEDIA_TYPE_AUDIO
-        : cricket::MediaType::MEDIA_TYPE_VIDEO;
+        ? webrtc::MediaType::AUDIO
+        : webrtc::MediaType::VIDEO;
     if (_sender->media_type() != expectedMediaType) {
       Reject(deferred, Napi::TypeError::New(info.Env(), "Kind does not match").Value().As<Napi::Value>());
       return deferred.Promise();

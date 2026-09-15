@@ -5,11 +5,15 @@ on:
   pull_request:
     branches:
       - develop
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   push:
     tags:
       - "v*"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -29,12 +33,27 @@ jobs:
           - os: ubuntu-latest
             node: 26
             generator: Ninja
+            webrtc_config: cmake/webrtc-linux.cmake
+            script_suffix: sh
+            platform_patch_1: cmake/webrtc-linux.cmake
+            platform_patch_2: cmake/webrtc-linux.cmake
+            legacy_artifact: ""
           - os: windows-2022
             node: 26
-            generator: Visual Studio 17 2022
+            generator: Ninja
+            webrtc_config: cmake/webrtc-windows.cmake
+            script_suffix: bat
+            platform_patch_1: scripts/patch-webrtc-windows.py
+            platform_patch_2: scripts/patch-webrtc-boringssl-prefix.py
+            legacy_artifact: ""
           - os: macos-latest
             node: 26
             generator: Ninja
+            webrtc_config: cmake/webrtc-macos.cmake
+            script_suffix: sh
+            platform_patch_1: scripts/patch-webrtc-apple-clt.py
+            platform_patch_2: scripts/patch-webrtc-apple-clt-modern.py
+            legacy_artifact: libwebrtc-macOS-ARM64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-macos26
 
     steps:
       - name: Checkout
@@ -59,20 +78,77 @@ jobs:
           if (-not $installPath) {
             throw 'Visual Studio 2022 with C++ build tools was not found'
           }
+          foreach ($command in 'clang-cl', 'lld-link', 'ninja') {
+            if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+              throw "$command was not found on PATH"
+            }
+          }
+          $resourceCompiler = Get-ChildItem `
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $resourceCompiler) {
+            throw 'The Windows SDK resource compiler was not found'
+          }
           "vs2022_install=$installPath" >> $env:GITHUB_ENV
-          Write-Host "Using Visual Studio from $installPath"
+          "RC=$resourceCompiler" >> $env:GITHUB_ENV
+          Write-Host "Using Visual Studio SDK from $installPath with clang-cl, lld-link, and Ninja"
+          Write-Host "Using Windows resource compiler $resourceCompiler"
 
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev gcc-12 g++-12
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 120 --slave /usr/bin/g++ g++ /usr/bin/g++-12
-          sudo update-alternatives --set gcc /usr/bin/gcc-12
+          sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
 
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install ninja
+
+      - name: Find matching WebRTC prebuilt
+        id: prebuilt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_BASE: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
+          LEGACY_ARTIFACT_NAME: ${{ matrix.legacy_artifact }}
+        run: |
+          ARTIFACT_NAME="$ARTIFACT_BASE-${ImageOS:-unknown}"
+          run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$ARTIFACT_NAME&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+          )"
+          if [ -z "$run_id" ] && [ -n "$LEGACY_ARTIFACT_NAME" ]; then
+            run_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$LEGACY_ARTIFACT_NAME&per_page=100" \
+                --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+            )"
+            if [ -n "$run_id" ]; then
+              ARTIFACT_NAME="$LEGACY_ARTIFACT_NAME"
+              echo "Using verified legacy artifact while platform-specific keys are bootstrapped"
+            fi
+          fi
+          echo "name=$ARTIFACT_NAME" >> "$GITHUB_OUTPUT"
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          if [ -n "$run_id" ]; then
+            echo "Found $ARTIFACT_NAME in run $run_id"
+          else
+            echo "No matching prebuilt; this job will perform a full WebRTC build"
+          fi
+
+      - name: Download matching WebRTC prebuilt
+        if: steps.prebuilt.outputs.run-id != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: build/external/libwebrtc
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.prebuilt.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Prepare WebRTC prebuilt layout
+        if: steps.prebuilt.outputs.run-id != ''
+        run: node scripts/prepare-webrtc-prebuilt.js
 
       - name: Install package dependencies
         run: npm install --ignore-scripts
@@ -81,7 +157,24 @@ jobs:
         env:
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
+          USE_CLANG_CL: 1
+          WEBRTC_PREBUILT: ${{ steps.prebuilt.outputs.run-id != '' && '1' || '0' }}
         run: npm run build
+
+      - name: Stage WebRTC prebuilt
+        id: stage-prebuilt
+        if: always() && steps.prebuilt.outputs.run-id == ''
+        run: node scripts/stage-webrtc-prebuilt.js
+
+      - name: Preserve WebRTC prebuilt
+        if: always() && steps.prebuilt.outputs.run-id == '' && steps.stage-prebuilt.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.prebuilt.outputs.name }}
+          path: .webrtc-prebuilt/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
 
       - name: Smoke load addon
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"

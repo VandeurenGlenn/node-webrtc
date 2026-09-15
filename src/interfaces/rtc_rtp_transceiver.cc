@@ -7,6 +7,8 @@
  */
 #include "src/interfaces/rtc_rtp_transceiver.h"
 
+#include <webrtc/api/array_view.h>
+
 #include <webrtc/api/rtp_transceiver_interface.h>
 #include <webrtc/api/scoped_refptr.h>
 
@@ -97,7 +99,7 @@ Napi::Value RTCRtpTransceiver::Stop(const Napi::CallbackInfo& info) {
 
 Napi::Value RTCRtpTransceiver::SetCodecPreferences(const Napi::CallbackInfo& info) {
   CONVERT_ARGS_OR_THROW_AND_RETURN_NAPI(info, codecs, std::vector<webrtc::RtpCodecCapability>)
-  auto capabilities = rtc::ArrayView<webrtc::RtpCodecCapability>(codecs);
+  auto capabilities = webrtc::ArrayView<webrtc::RtpCodecCapability>(codecs);
   auto error = _transceiver->SetCodecPreferences(capabilities);
   if (!error.ok()) {
     CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), &error, result, Napi::Value)

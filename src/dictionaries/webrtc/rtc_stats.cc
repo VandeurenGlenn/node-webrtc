@@ -20,11 +20,11 @@ TO_NAPI_IMPL(const webrtc::RTCStats*, pair) {
   auto value = pair.second;
   NODE_WEBRTC_CREATE_OBJECT_OR_RETURN(env, stats)
   NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, "id", value->id())
-  NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, "timestamp", value->timestamp_us() / 1000.0)
+  NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, "timestamp", value->timestamp().us<double>() / 1000.0)
   NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, "type", std::string(value->type()))
-  for (const webrtc::RTCStatsMemberInterface* member : value->Members()) {
-    if (member->is_defined()) {
-      NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, member->name(), member)
+  for (const auto& attribute : value->Attributes()) {
+    if (attribute.has_value()) {
+      NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, stats, attribute.name(), &attribute)
     }
   }
   return Pure(scope.Escape(stats));

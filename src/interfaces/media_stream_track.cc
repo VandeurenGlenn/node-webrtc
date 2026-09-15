@@ -8,7 +8,7 @@
 #include "src/interfaces/media_stream_track.h"
 
 #include <webrtc/api/peer_connection_interface.h>
-#include <webrtc/rtc_base/helpers.h>
+#include <webrtc/rtc_base/crypto_random.h>
 
 #include "src/converters.h"
 #include "src/converters/interfaces.h"
@@ -122,7 +122,8 @@ Napi::Value MediaStreamTrack::Clone(const Napi::CallbackInfo&) {
     clonedTrack = _factory->factory()->CreateAudioTrack(label, audioTrack->GetSource());
   } else {
     auto videoTrack = static_cast<webrtc::VideoTrackInterface*>(_track.get());
-    clonedTrack = _factory->factory()->CreateVideoTrack(label, videoTrack->GetSource());
+    rtc::scoped_refptr<webrtc::VideoTrackSourceInterface> source(videoTrack->GetSource());
+    clonedTrack = _factory->factory()->CreateVideoTrack(source, label);
   }
   auto clonedMediaStreamTrack = wrap()->GetOrCreate(_factory, clonedTrack);
   if (_ended) {

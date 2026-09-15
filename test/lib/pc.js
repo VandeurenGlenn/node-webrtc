@@ -74,11 +74,17 @@ async function getLocalTrackStats(pc, track, check = () => true) {
   let stats;
   do {
     const report = await pc.getStats();
-    stats = [...report.values()]
-      .find(stats => stats.type === 'track'
-                  && stats.trackIdentifier === track.id
-                  && !stats.remote
-                  && check(stats));
+    const values = [...report.values()];
+    const mediaSource = values.find(stats => stats.type === 'media-source'
+      && stats.trackIdentifier === track.id);
+    stats = values.find(stats => (
+      (stats.type === 'track'
+        && stats.trackIdentifier === track.id
+        && !stats.remote)
+      || (stats.type === 'outbound-rtp'
+        && mediaSource
+        && stats.mediaSourceId === mediaSource.id)
+    ) && check(stats));
   } while (!stats);
   return stats;
 }

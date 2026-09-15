@@ -5,12 +5,15 @@
 
 [![NPM](https://img.shields.io/npm/v/%40vandeurenglenn%2Fwrtc.svg)](https://www.npmjs.com/package/@vandeurenglenn/wrtc) [![Cross Platform Source Build](https://github.com/VandeurenGlenn/node-webrtc/actions/workflows/cross-platform-source-build.yml/badge.svg?branch=develop)](https://github.com/VandeurenGlenn/node-webrtc/actions/workflows/cross-platform-source-build.yml)
 
-node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M87](https://chromium.googlesource.com/external/webrtc/+/branch-heads/4280). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
+node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M152, branch-heads/7977](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7977). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
 
+Modern source builds are continuously tested with Node.js 26 on Linux, macOS,
+and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
+`clang-cl` on Windows, and its pinned toolchain on macOS. The addon and WebRTC
+share each platform's standard C++ library ABI.
 
-Native source builds are continuously tested with Node 26 on Ubuntu, macOS, and
-Windows. The Windows build includes compatibility support for Visual Studio 2022
-while retaining the pinned WebRTC M87 source revision.
+Windows source builds use Visual Studio 2022 for CMake and the Node addon;
+WebRTC itself is compiled with its bundled `clang-cl`.
 
 ---
 
@@ -41,7 +44,8 @@ See [node-webrtc/node-webrtc-examples](https://github.com/node-webrtc/node-webrt
 Contributing
 ------------
 
-Contributions welcome! Please refer to the [wiki](https://github.com/node-webrtc/node-webrtc/wiki/Contributing).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the local
+build, test, and pull-request workflow.
 
 Benchmarking
 ------------

@@ -13,21 +13,17 @@
 #include <webrtc/api/ice_transport_interface.h>
 #include <webrtc/api/scoped_refptr.h>
 #include <webrtc/p2p/base/ice_transport_internal.h>
-#include <webrtc/rtc_base/third_party/sigslot/sigslot.h>
 
 #include "src/enums/node_webrtc/rtc_ice_component.h"
 #include "src/node/async_object_wrap_with_loop.h"
 #include "src/node/wrap.h"
-
-namespace cricket { class IceTransportInternal; }
 
 namespace node_webrtc {
 
 class PeerConnectionFactory;
 
 class RTCIceTransport
-  : public AsyncObjectWrapWithLoop<RTCIceTransport>
-  , public sigslot::has_slots<sigslot::multi_threaded_local> {
+  : public AsyncObjectWrapWithLoop<RTCIceTransport> {
  public:
   explicit RTCIceTransport(const Napi::CallbackInfo&);
 
@@ -53,8 +49,8 @@ class RTCIceTransport
       PeerConnectionFactory*,
       rtc::scoped_refptr<webrtc::IceTransportInterface>);
 
-  void OnStateChanged(cricket::IceTransportInternal*);
-  void OnGatheringStateChanged(cricket::IceTransportInternal*);
+  void OnStateChanged(webrtc::IceTransportInternal*);
+  void OnGatheringStateChanged(webrtc::IceTransportInternal*);
 
   void TakeSnapshot();
 
@@ -71,9 +67,9 @@ class RTCIceTransport
 
   RTCIceComponent _component = RTCIceComponent::kRtp;
   PeerConnectionFactory* _factory;
-  cricket::IceGatheringState _gathering_state = cricket::IceGatheringState::kIceGatheringNew;
+  webrtc::IceGatheringState _gathering_state = webrtc::IceGatheringState::kIceGatheringNew;
   std::mutex _mutex{};
-  cricket::IceRole _role = cricket::IceRole::ICEROLE_UNKNOWN;
+  webrtc::IceRole _role = webrtc::IceRole::ICEROLE_UNKNOWN;
   webrtc::IceTransportState _state = webrtc::IceTransportState::kNew;
   rtc::scoped_refptr<webrtc::IceTransportInterface> _transport;
 };

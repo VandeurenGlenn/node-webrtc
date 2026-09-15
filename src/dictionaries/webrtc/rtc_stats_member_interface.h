@@ -2,10 +2,10 @@
 
 #include "src/converters/napi.h"
 
-namespace webrtc { class RTCStatsMemberInterface; }
+namespace webrtc { class Attribute; }
 
 namespace node_webrtc {
 
-DECLARE_TO_NAPI(const webrtc::RTCStatsMemberInterface*)
+DECLARE_TO_NAPI(const webrtc::Attribute*)
 
 }  // namespace node_webrtc

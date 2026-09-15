@@ -6,15 +6,31 @@ find_package(Git REQUIRED)
 find_package(Threads REQUIRED)
 find_program(iwyu_path OPTIONAL NAMES include-what-you-use iwyu)
 find_program(clang_tidy_path OPTIONAL NAMES clang-tidy)
+option(WRTC_ENABLE_IWYU "Run include-what-you-use while compiling the addon" OFF)
+option(WRTC_ENABLE_CLANG_TIDY "Run clang-tidy while compiling the addon" OFF)
+
+set(WEBRTC_PREBUILT_DEFAULT OFF)
+if(DEFINED ENV{WEBRTC_PREBUILT} AND "$ENV{WEBRTC_PREBUILT}" STREQUAL "1")
+  set(WEBRTC_PREBUILT_DEFAULT ON)
+endif()
+option(WEBRTC_PREBUILT "Use a previously built libwebrtc tree" ${WEBRTC_PREBUILT_DEFAULT})
+
+set(
+  DEPOT_TOOLS_REVISION
+  81577f19a8497ba7e41afac322e8f03553a863ec
+  CACHE STRING
+  "Pinned depot_tools revision used to fetch and build libwebrtc"
+)
 
 # depot_tools
 # -----------------------------------------------------------------------------
 
+if(NOT WEBRTC_PREBUILT)
 ExternalProject_Add(
   project_depot_tools
 
   GIT_REPOSITORY    https://chromium.googlesource.com/chromium/tools/depot_tools.git
-  GIT_TAG           650096367cd9900e499052c49179b33b68fa1ac9
+  GIT_TAG           ${DEPOT_TOOLS_REVISION}
 
   PREFIX            ${CMAKE_BINARY_DIR}/external/depot_tools/prefix
   TMP_DIR           ${CMAKE_BINARY_DIR}/external/depot_tools/tmp
@@ -30,200 +46,21 @@ ExternalProject_Add(
 
 ExternalProject_Get_Property(project_depot_tools SOURCE_DIR)
 set(depot_tools_install_dir ${SOURCE_DIR})
-
-# libc++
-# -----------------------------------------------------------------------------
+endif()
 
 set(libwebrtc_binary_dir ${CMAKE_BINARY_DIR}/external/libwebrtc/build/${CMAKE_BUILD_TYPE})
 set(libwebrtc_src_dir ${CMAKE_BINARY_DIR}/external/libwebrtc/download/src)
 
-add_library(libc++ OBJECT IMPORTED)
-add_dependencies(libc++ libwebrtc)
-
-set(libc++_objects
-  algorithm.o
-  any.o
-  atomic.o
-  barrier.o
-  bind.o
-  charconv.o
-  chrono.o
-  condition_variable.o
-  condition_variable_destructor.o
-  debug.o
-  exception.o
-  functional.o
-  future.o
-  hash.o
-  ios.instantiations.o
-  ios.o
-  iostream.o
-  locale.o
-  memory.o
-  mutex.o
-  mutex_destructor.o
-  new.o
-  optional.o
-  random.o
-  random_shuffle.o
-  regex.o
-  shared_mutex.o
-  stdexcept.o
-  string.o
-  strstream.o
-  system_error.o
-  thread.o
-  typeinfo.o
-  utility.o
-  valarray.o
-  variant.o
-  vector.o
-)
-list(TRANSFORM libc++_objects PREPEND ${libwebrtc_binary_dir}/obj/buildtools/third_party/libc++/libc++/)
-
-set_property(TARGET libc++ APPEND PROPERTY IMPORTED_CONFIGURATIONS DEBUG)
-set_target_properties(libc++ PROPERTIES IMPORTED_OBJECTS_DEBUG "${libc++_objects}" IMPORTED_OBJECTS "${libc++_objects}")
-
-# NOTE(mroberts): I would like this to be INTERFACE.
-#
-#   https://gitlab.kitware.com/cmake/cmake/issues/15052
-#
-# target_include_directories(libc++ SYSTEM INTERFACE "${libc++_include_dir}")
-
-# libc++abi
-# -----------------------------------------------------------------------------
-
-add_library(libc++abi OBJECT IMPORTED)
-add_dependencies(libc++abi libwebrtc)
-
-set(libc++abi_objects
-  abort_message.o
-  cxa_aux_runtime.o
-  cxa_default_handlers.o
-  cxa_demangle.o
-  cxa_exception.o
-  cxa_exception_storage.o
-  cxa_guard.o
-  cxa_handlers.o
-  cxa_personality.o
-  #cxa_unexpected.o
-  cxa_vector.o
-  cxa_virtual.o
-  fallback_malloc.o
-  private_typeinfo.o
-  stdlib_exception.o
-  stdlib_stdexcept.o
-  stdlib_typeinfo.o
-)
-list(TRANSFORM libc++abi_objects PREPEND ${libwebrtc_binary_dir}/obj/buildtools/third_party/libc++abi/libc++abi/)
-
-set_property(TARGET libc++abi APPEND PROPERTY IMPORTED_CONFIGURATIONS DEBUG)
-set_target_properties(libc++abi PROPERTIES IMPORTED_OBJECTS_DEBUG "${libc++abi_objects}" IMPORTED_OBJECTS "${libc++abi_objects}")
-
-# NOTE(mroberts): I would like this to be INTERFACE.
-#
-#   https://gitlab.kitware.com/cmake/cmake/issues/15052
-#
-# target_include_directories(libc++abi SYSTEM INTERFACE "${libc++abi_include_dir}")
-
 # libwebrtc
 # -----------------------------------------------------------------------------
 
-set(WEBRTC_REVISION branch-heads/4500)
-
-option(WEBRTC_MODERN_APPLE_COMPAT "Enable compatibility flags for modern Xcode/SDK on macOS" ON)
-option(WEBRTC_USE_SYSTEM_XCODE_CLANG "Use Xcode clang toolchain for libwebrtc on macOS" ON)
-
-list(APPEND GN_GEN_ARGS
-  rtc_build_examples=false
-  rtc_use_x11=false
-  rtc_enable_protobuf=false
-  rtc_include_pulse_audio=false
-  rtc_include_tests=false
-)
-if ("$ENV{TARGET_ARCH}" STREQUAL "arm")
-  list(APPEND GN_GEN_ARGS
-    target_os="linux"
-    target_cpu="arm"
-    rtc_build_tools=true
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-elseif ("$ENV{TARGET_ARCH}" STREQUAL "arm64")
-  if(NOT APPLE)
-  list(APPEND GN_GEN_ARGS
-    target_os="linux"
-  )
-  endif()
-  list(APPEND GN_GEN_ARGS
-    target_cpu="arm64"
-    rtc_build_tools=true
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
+include(${CMAKE_SOURCE_DIR}/cmake/webrtc-common.cmake)
+if(WIN32)
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-windows.cmake)
+elseif(APPLE)
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-macos.cmake)
 else()
-  list(APPEND GN_GEN_ARGS
-    rtc_build_tools=false
-  )
-endif()
-
-if (WIN32 OR (UNIX AND NOT APPLE))
-  list(APPEND GN_GEN_ARGS is_clang=false)
-endif()
-if (WIN32)
-  # The pinned WebRTC/NASM sources emit warnings with current MSVC that were
-  # not produced by the compiler version they originally targeted.
-  list(APPEND GN_GEN_ARGS
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-endif()
-if (UNIX AND NOT APPLE)
-  list(APPEND GN_GEN_ARGS
-    use_custom_libcxx=false
-    use_custom_libcxx_for_host=false
-    use_sysroot=false
-    treat_warnings_as_errors=false
-    fatal_linker_warnings=false
-  )
-endif()
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-  list(APPEND GN_GEN_ARGS is_debug=true)
-else()
-  list(APPEND GN_GEN_ARGS is_debug=false)
-endif()
-if (APPLE)
-  if (WEBRTC_MODERN_APPLE_COMPAT)
-    list(APPEND GN_GEN_ARGS
-      treat_warnings_as_errors=false
-      fatal_linker_warnings=false
-    )
-  endif()
-  if (WEBRTC_USE_SYSTEM_XCODE_CLANG)
-    if (DEFINED ENV{DEVELOPER_DIR} AND NOT "$ENV{DEVELOPER_DIR}" STREQUAL "")
-      set(apple_clang_base_path "$ENV{DEVELOPER_DIR}/Toolchains/XcodeDefault.xctoolchain/usr")
-    else()
-      execute_process(
-        COMMAND xcrun --find clang
-        OUTPUT_VARIABLE apple_clang_path
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE apple_clang_result
-      )
-      if (apple_clang_result EQUAL 0)
-        get_filename_component(apple_clang_bin_dir "${apple_clang_path}" DIRECTORY)
-        get_filename_component(apple_clang_base_path "${apple_clang_bin_dir}" DIRECTORY)
-      endif()
-    endif()
-    if (apple_clang_base_path)
-      list(APPEND GN_GEN_ARGS
-        clang_base_path="${apple_clang_base_path}"
-        clang_use_chrome_plugins=false
-      )
-    endif()
-  endif()
-endif()
-if (APPLE AND DEFINED ENV{SDKROOT} AND NOT "$ENV{SDKROOT}" STREQUAL "")
-  list(APPEND GN_GEN_ARGS mac_sdk_path="$ENV{SDKROOT}")
+  include(${CMAKE_SOURCE_DIR}/cmake/webrtc-linux.cmake)
 endif()
 string(REPLACE ";" " " GN_GEN_ARGS "${GN_GEN_ARGS}")
 
@@ -243,7 +80,7 @@ if (DEFINED ENV{FORCE_MAC_SDK_MIN} AND NOT "$ENV{FORCE_MAC_SDK_MIN}" STREQUAL ""
   list(APPEND webrtc_build_env FORCE_MAC_SDK_MIN=$ENV{FORCE_MAC_SDK_MIN})
 endif()
 
-if(WIN32)
+if (WIN32)
   set(suffix bat)
   set(PLATFORM windows)
 else()
@@ -258,19 +95,25 @@ endif()
 if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
-    ${libwebrtc_binary_dir}/obj/pc/peerconnection.lib
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj
+  )
+elseif(UNIX)
+  set(byproducts
+    ${libwebrtc_binary_dir}/obj/libwebrtc.a
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o
   )
 else()
   set(byproducts
-    ${libc++_objects}
     ${libwebrtc_binary_dir}/obj/libwebrtc.a
-    ${libwebrtc_binary_dir}/obj/pc/libpeerconnection.a
+    ${libwebrtc_binary_dir}/obj/api/video/libadapted_video_track_source.a
   )
-  if (NOT APPLE)
-    list(APPEND byproducts ${libc++abi_objects})
-  endif()
 endif()
 
+if(NOT WEBRTC_PREBUILT)
 ExternalProject_Add(
   project_libwebrtc
 
@@ -297,27 +140,53 @@ set(libwebrtc_source_dir "${DOWNLOAD_DIR}")
 
 ExternalProject_Get_Property(project_libwebrtc BINARY_DIR)
 set(libwebrtc_binary_dir "${BINARY_DIR}")
+else()
+  if(NOT EXISTS "${libwebrtc_src_dir}" OR NOT EXISTS "${libwebrtc_binary_dir}")
+    message(FATAL_ERROR "WEBRTC_PREBUILT requires build/external/libwebrtc/download/src and build/external/libwebrtc/build/${CMAKE_BUILD_TYPE}")
+  endif()
+  set(libwebrtc_source_dir "${CMAKE_BINARY_DIR}/external/libwebrtc/download")
+endif()
 
 add_library(libwebrtc STATIC IMPORTED)
-add_dependencies(libwebrtc project_libwebrtc)
+if(TARGET project_libwebrtc)
+  add_dependencies(libwebrtc project_libwebrtc)
+endif()
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
+  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
+  add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+    add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
+  endif()
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj")
+  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
+    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj"
+  )
+  set(libwebrtc_platform_extras
+    libwebrtc_adapted_video_track_source
+    libwebrtc_builtin_video_codec_factories
+  )
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
+  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+  endif()
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.o")
+  add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
+  if(TARGET project_libwebrtc)
+    add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
+  endif()
+  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
+    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.o;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.o"
+  )
+  set(libwebrtc_platform_extras
+    libwebrtc_adapted_video_track_source
+    libwebrtc_builtin_video_codec_factories
+  )
 endif()
-
-add_library(libpeerconnection STATIC IMPORTED)
-add_dependencies(libpeerconnection project_libwebrtc)
-
-if(WIN32)
-  set_property(TARGET libpeerconnection PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/pc/peerconnection.lib")
-else()
-  set_property(TARGET libpeerconnection PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/pc/libpeerconnection.a")
-endif()
-
-set(libc++_include_dir "${libwebrtc_source_dir}/src/buildtools/third_party/libc++/trunk/include")
-set(libc++abi_include_dir "${libwebrtc_source_dir}/src/buildtools/third_party/libc++abi/trunk/include")
 
 # NOTE(mroberts): I would like this to be INTERFACE.
 #
@@ -377,14 +246,37 @@ endif()
 nodejs_init(${nodejs_init_args})
 
 file(GLOB_RECURSE MODULE_SRC src/*.cc src/*.h)
+list(FILTER MODULE_SRC EXCLUDE REGEX ".*/rtc_peer_connection/stats_observer\\.(cc|h)$")
+list(FILTER MODULE_SRC EXCLUDE REGEX ".*/webrtc/test_audio_device_module\\.(cc|h)$")
 add_nodejs_module(${MODULE} ${MODULE_SRC})
-set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 14)
+set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
-if(NOT iwyu_path STREQUAL "iwyu_path-NOTFOUND")
+# The JavaScript loader and node-pre-gyp packaging both expect the Windows
+# addon in build/Release. Multi-config Visual Studio generators put it there
+# automatically, while the single-config Ninja generator otherwise writes it
+# directly to the build root.
+if(WIN32)
+  set_target_properties(${MODULE} PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
+  )
+endif()
+
+if(MSVC)
+  set_source_files_properties(${MODULE_SRC} PROPERTIES
+    COMPILE_OPTIONS "/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h"
+  )
+else()
+  set_source_files_properties(${MODULE_SRC} PROPERTIES
+    COMPILE_OPTIONS "-include${CMAKE_SOURCE_DIR}/src/webrtc/compat.h"
+  )
+endif()
+
+if(WRTC_ENABLE_IWYU AND NOT iwyu_path STREQUAL "iwyu_path-NOTFOUND")
   set_property(TARGET ${MODULE} PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_path} -Xiwyu --mapping_file=${CMAKE_SOURCE_DIR}/.iwyu.imp)
 endif()
 
-if(NOT clang_tidy_path STREQUAL "clang_tidy_path-NOTFOUND")
+if(WRTC_ENABLE_CLANG_TIDY AND NOT clang_tidy_path STREQUAL "clang_tidy_path-NOTFOUND")
   set_property(TARGET ${MODULE} PROPERTY CXX_CLANG_TIDY ${clang_tidy_path})
 endif()
 
@@ -416,8 +308,8 @@ target_include_directories(${MODULE} PRIVATE
 
 target_link_libraries(${MODULE} PRIVATE
   ${CMAKE_THREAD_LIBS_INIT}
-  libpeerconnection
   libwebrtc
+  ${libwebrtc_platform_extras}
 )
 
 target_compile_definitions(${MODULE} PRIVATE
@@ -426,12 +318,16 @@ target_compile_definitions(${MODULE} PRIVATE
 )
 
 if(WIN32)
+  # Apply the static CRT consistently to both the C delay-load hook and the
+  # C++ addon sources. Setting /MT only in CXX flags leaves the hook on /MD,
+  # which makes lld-link look for the dynamic UCRT import symbols.
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /GR-")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /GR- -D_HAS_ITERATOR_DEBUGGING=0")
-  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /FORCE:UNRESOLVED")
-
   target_link_libraries(${MODULE} PRIVATE
     dmoguids.lib
+    iphlpapi.lib
     msdmo.lib
     secur32.lib
     winmm.lib
@@ -447,29 +343,13 @@ if(WIN32)
     -DWEBRTC_WIN
   )
 elseif(APPLE)
-  # NOTE(mroberts): Workaround for
-  #
-  #   https://gitlab.kitware.com/cmake/cmake/issues/15052
-  #
-  # is to include all the header files here.
-  target_include_directories(${MODULE} SYSTEM PRIVATE
-    ${libc++_include_dir}
-    ${libc++abi_include_dir}
-  )
-
-  # NOTE(mroberts): On macOS, we statically link the same libc++ and
-  # libc++abi libraries that libwebrtc builds against.
   target_link_libraries(${MODULE} PRIVATE
-    -lc
     -lm
-    libc++
   )
 
   target_compile_options(${MODULE} PRIVATE
     -fno-rtti
     -fvisibility=hidden
-    -nostdinc++
-    -nodefaultlibs
     -Wall
     -Wextra
     -Wno-missing-field-initializers
@@ -482,7 +362,6 @@ elseif(APPLE)
   )
 
   target_compile_definitions(${MODULE} PRIVATE
-    -D_LIBCPP_ABI_UNSTABLE
     -DWEBRTC_POSIX=1
   )
 
@@ -529,9 +408,7 @@ elseif(APPLE)
   )
 
   target_compile_definitions(${MODULE} PRIVATE
-    -D_LIBCPP_ABI_UNSTABLE
     -DWEBRTC_MAC
-    -DWEBRTC_IOS
   )
 else()
   # Linux: use system libstdc++ to avoid linking against Clang-specific bundled
@@ -597,8 +474,16 @@ else()
       set(CMAKE_CXX_COMPILER ${tools}/bin/aarch64-linux-gnu-g++)
     endif()
   else()
+    set(chromium_llvm_bin
+      ${libwebrtc_source_dir}/src/third_party/llvm-build/Release+Asserts/bin
+    )
     target_compile_options(${MODULE} PRIVATE
       -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
+    )
+    # M152's Clang can emit LLVM objects that GNU ld/collect2 cannot consume.
+    # Use the matching Chromium lld while retaining the system libstdc++ ABI.
+    set_property(TARGET ${MODULE} APPEND_STRING PROPERTY LINK_FLAGS
+      " -B${chromium_llvm_bin} -fuse-ld=lld"
     )
   endif()
 endif()

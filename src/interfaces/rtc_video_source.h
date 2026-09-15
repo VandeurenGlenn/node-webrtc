@@ -13,7 +13,7 @@
 #include <node-addon-api/napi.h>
 #include <webrtc/api/media_stream_interface.h>
 #include <webrtc/api/scoped_refptr.h>
-#include <webrtc/media/base/adapted_video_track_source.h>
+#include <webrtc/api/video/adapted_video_track_source.h>
 
 #include "src/dictionaries/node_webrtc/rtc_video_source_init.h"
 #include "src/interfaces/rtc_peer_connection/peer_connection_factory.h"
@@ -22,13 +22,13 @@ namespace webrtc { class VideoFrame; }
 
 namespace node_webrtc {
 
-class RTCVideoTrackSource : public rtc::AdaptedVideoTrackSource {
+class RTCVideoTrackSource : public webrtc::AdaptedVideoTrackSource {
  public:
   RTCVideoTrackSource()
-    : rtc::AdaptedVideoTrackSource(), _is_screencast(false) {}
+    : webrtc::AdaptedVideoTrackSource(), _is_screencast(false) {}
 
   RTCVideoTrackSource(const bool is_screencast, const absl::optional<bool> needs_denoising)
-    : rtc::AdaptedVideoTrackSource(), _is_screencast(is_screencast), _needs_denoising(needs_denoising) {}
+    : webrtc::AdaptedVideoTrackSource(), _is_screencast(is_screencast), _needs_denoising(needs_denoising) {}
 
   ~RTCVideoTrackSource() override {
     PeerConnectionFactory::Release();

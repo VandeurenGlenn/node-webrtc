@@ -30,4 +30,16 @@ class RTCStatsCollector
   void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>&) override;
 };
 
+class LegacyRTCStatsCollector
+  : public PromiseCreator<RTCPeerConnection>
+  , public webrtc::RTCStatsCollectorCallback {
+ public:
+  LegacyRTCStatsCollector(
+      RTCPeerConnection* peer_connection,
+      Napi::Promise::Deferred deferred)
+    : PromiseCreator<RTCPeerConnection>(peer_connection, deferred) {}
+
+  void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>&) override;
+};
+
 }  // namespace node_webrtc;

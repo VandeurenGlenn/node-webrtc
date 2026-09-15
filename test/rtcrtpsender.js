@@ -94,7 +94,7 @@ tape('.addTrack(track, stream, stream2, stream3) duplicate stream ids', function
       return sender.track === tracks[i];
     }), 'every RTCRtpSender\'s .track is one of the MediaStreamTracks added');
     return pc.createOffer().then(function(offer) {
-      t.equal((offer.sdp.match(/a=msid:/g) || []).length, 6, 'even duplicates get added');  // 3 streams per track and 2 tracks (audio + video) = 6 msid lines
+      t.equal((offer.sdp.match(/a=msid:/g) || []).length, 4, 'duplicate stream ids are deduplicated');
       pc.close();
       t.end();
     });

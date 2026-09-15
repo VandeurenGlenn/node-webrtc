@@ -6,7 +6,7 @@ var SimplePeer = require("simple-peer");
 var wrtc = require("..");
 
 var log = process.env.LOG ? console.log : function () {};
-var CONNECT_TIMEOUT_MS = Number(process.env.CONNECT_TIMEOUT_MS) || 15000;
+var CONNECT_TIMEOUT_MS = Number(process.env.CONNECT_TIMEOUT_MS) || 30000;
 
 tape("connect once", function (t) {
   t.plan(1);
@@ -61,10 +61,14 @@ function connect(callback) {
   // setup two peers with simple-peer
   var peer1 = new SimplePeer({
     wrtc: wrtc,
+    trickle: false,
+    config: { iceServers: [] },
   });
   var peer2 = new SimplePeer({
     wrtc: wrtc,
     initiator: true,
+    trickle: false,
+    config: { iceServers: [] },
   });
   var timer = null;
   var finished = false;

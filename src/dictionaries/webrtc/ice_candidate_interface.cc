@@ -60,15 +60,15 @@ TO_NAPI_IMPL(webrtc::IceCandidateInterface*, pair) {
   auto candidate = value->candidate();
   auto component = candidate.component() == 1 ? RTCIceComponent::kRtp : RTCIceComponent::kRtcp;
 
-  const auto& candidate_type = candidate.type();
+  const auto candidate_type = candidate.type();
   auto type = RTCIceCandidateType::kHost;
-  if (candidate_type == cricket::LOCAL_PORT_TYPE) {
+  if (candidate_type == webrtc::IceCandidateType::kHost) {
     type = RTCIceCandidateType::kHost;
-  } else if (candidate_type == cricket::STUN_PORT_TYPE) {
+  } else if (candidate_type == webrtc::IceCandidateType::kSrflx) {
     type = RTCIceCandidateType::kSrflx;
-  } else if (candidate_type == cricket::RELAY_PORT_TYPE) {
+  } else if (candidate_type == webrtc::IceCandidateType::kRelay) {
     type = RTCIceCandidateType::kRelay;
-  } else if (candidate_type == cricket::PRFLX_PORT_TYPE) {
+  } else if (candidate_type == webrtc::IceCandidateType::kPrflx) {
     type = RTCIceCandidateType::kPrflx;
   }
 
