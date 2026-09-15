@@ -7,7 +7,6 @@
 #define SDP_SEMANTICS webrtc::SdpSemantics
 #define SDP_SEMANTICS_NAME "RTCSdpSemantics"
 #define SDP_SEMANTICS_LIST \
-  ENUM_SUPPORTED(SDP_SEMANTICS::kPlanB, "plan-b") \
   ENUM_SUPPORTED(SDP_SEMANTICS::kUnifiedPlan, "unified-plan")
 
 #define ENUM(X) SDP_SEMANTICS ## X

@@ -7,6 +7,22 @@ import { execSync } from "node:child_process";
 
 let wrtc = null;
 
+function relayIceCandidate(peerConnection, candidate) {
+  if (!candidate || peerConnection.signalingState === "closed") {
+    return;
+  }
+
+  peerConnection.addIceCandidate(candidate).catch((error) => {
+    // Candidate events can already be queued when a benchmark closes its peers.
+    // Ignore only that expected shutdown race; surface every other ICE failure.
+    if (peerConnection.signalingState !== "closed") {
+      queueMicrotask(() => {
+        throw error;
+      });
+    }
+  });
+}
+
 function createRTCPeerConnections(
   configuration1 = {},
   configuration2 = {},
@@ -25,9 +41,7 @@ function createRTCPeerConnections(
         [pc2, pc1],
       ].forEach(([pcA, pcB]) => {
         pcA.addEventListener("icecandidate", ({ candidate }) => {
-          if (candidate) {
-            pcB.addIceCandidate(candidate);
-          }
+          relayIceCandidate(pcB, candidate);
         });
       });
     }
