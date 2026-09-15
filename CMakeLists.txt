@@ -241,6 +241,17 @@ list(FILTER MODULE_SRC EXCLUDE REGEX ".*/webrtc/test_audio_device_module\\.(cc|h
 add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
+# The JavaScript loader and node-pre-gyp packaging both expect the Windows
+# addon in build/Release. Multi-config Visual Studio generators put it there
+# automatically, while the single-config Ninja generator otherwise writes it
+# directly to the build root.
+if(WIN32)
+  set_target_properties(${MODULE} PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
+  )
+endif()
+
 if(MSVC)
   set_source_files_properties(${MODULE_SRC} PROPERTIES
     COMPILE_OPTIONS "/FI${CMAKE_SOURCE_DIR}/src/webrtc/compat.h"
