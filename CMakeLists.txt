@@ -95,7 +95,9 @@ endif()
 if (WIN32)
   set(byproducts
     ${libwebrtc_binary_dir}/obj/webrtc.lib
-    ${libwebrtc_binary_dir}/obj/node_webrtc_extras.lib
+    ${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj
+    ${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj
   )
 elseif(UNIX)
   set(byproducts
@@ -152,12 +154,20 @@ endif()
 
 if(WIN32)
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/webrtc.lib")
-  add_library(libwebrtc_node_extras STATIC IMPORTED)
+  add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)
+  add_library(libwebrtc_builtin_video_codec_factories OBJECT IMPORTED)
   if(TARGET project_libwebrtc)
-    add_dependencies(libwebrtc_node_extras project_libwebrtc)
+    add_dependencies(libwebrtc_adapted_video_track_source project_libwebrtc)
+    add_dependencies(libwebrtc_builtin_video_codec_factories project_libwebrtc)
   endif()
-  set_property(TARGET libwebrtc_node_extras PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/node_webrtc_extras.lib")
-  set(libwebrtc_platform_extras libwebrtc_node_extras)
+  set_property(TARGET libwebrtc_adapted_video_track_source PROPERTY IMPORTED_OBJECTS "${libwebrtc_binary_dir}/obj/api/video/adapted_video_track_source/adapted_video_track_source.obj")
+  set_property(TARGET libwebrtc_builtin_video_codec_factories PROPERTY IMPORTED_OBJECTS
+    "${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj;${libwebrtc_binary_dir}/obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj"
+  )
+  set(libwebrtc_platform_extras
+    libwebrtc_adapted_video_track_source
+    libwebrtc_builtin_video_codec_factories
+  )
 else()
   set_property(TARGET libwebrtc PROPERTY IMPORTED_LOCATION "${libwebrtc_binary_dir}/obj/libwebrtc.a")
   add_library(libwebrtc_adapted_video_track_source OBJECT IMPORTED)

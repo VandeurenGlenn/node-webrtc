@@ -54,7 +54,12 @@ if (existsSync(generated)) {
 }
 
 const outputs = process.platform === "win32"
-  ? ["obj/webrtc.lib", "obj/node_webrtc_extras.lib"]
+  ? [
+      "obj/webrtc.lib",
+      "obj/api/video/adapted_video_track_source/adapted_video_track_source.obj",
+      "obj/api/video_codecs/builtin_video_decoder_factory/builtin_video_decoder_factory.obj",
+      "obj/api/video_codecs/builtin_video_encoder_factory/builtin_video_encoder_factory.obj",
+    ]
   : [
       "obj/libwebrtc.a",
       "obj/api/video/adapted_video_track_source/adapted_video_track_source.o",
