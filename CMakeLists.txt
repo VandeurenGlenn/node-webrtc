@@ -318,6 +318,11 @@ target_compile_definitions(${MODULE} PRIVATE
 )
 
 if(WIN32)
+  # Apply the static CRT consistently to both the C delay-load hook and the
+  # C++ addon sources. Setting /MT only in CXX flags leaves the hook on /MD,
+  # which makes lld-link look for the dynamic UCRT import symbols.
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /GR-")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /GR- -D_HAS_ITERATOR_DEBUGGING=0")
   target_link_libraries(${MODULE} PRIVATE
