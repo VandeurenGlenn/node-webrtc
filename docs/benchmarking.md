@@ -7,18 +7,14 @@ This repository includes a repeatable benchmark runner for tracking performance 
 - `pc_create_close_ms`: Time to create and close an `RTCPeerConnection`.
 - `pc_negotiate_datachannel_open_ms`: Time from start of negotiation to both data channels being open.
 - `datachannel_unordered_unreliable_rtt_ms`: Average RTT for unordered/unreliable DataChannel ping/echo.
+- `datachannel_unordered_unreliable_binary_rtt_ms`: Average RTT for binary unordered/unreliable DataChannel ping/echo.
 
 All metrics are lower-is-better.
 
 ## Commands
 
-The benchmark flow is validated on Node 16 (`v16.20.2`).
-
-If you are on a newer Node version without a matching prebuilt binary, switch first:
-
-```bash
-nvm use 16.20.2
-```
+The benchmark flow requires Node.js 20 or newer and a built or installed native
+addon.
 
 Run a benchmark and store timestamped results:
 
@@ -54,6 +50,25 @@ node benchmarks/run.js --baseline benchmarks/baseline.json --regression-threshol
 3. While iterating, run `npm run bench` to gather timestamped snapshots.
 4. Before merging, run `npm run bench:compare`.
 5. Treat regressions as a prompt to investigate, rerun, and confirm.
+
+## CI reports
+
+Pull requests run a stable benchmark on Linux, macOS, and Windows. Each result
+is compared with the latest successful `develop` run from the same operating
+system and architecture. This avoids invalid comparisons between different
+GitHub runner types.
+
+Open the **Visual benchmark report** job in GitHub Actions to see the combined
+comparison table. The same job publishes a `benchmark-dashboard` artifact with
+a self-contained HTML report. Individual platform JSON results are retained as
+workflow artifacts for 90 days and become the baseline for subsequent pull
+requests after they land on `develop`.
+
+Successful `develop` builds also publish the report at
+[vandeurenglenn.github.io/node-webrtc](https://vandeurenglenn.github.io/node-webrtc/).
+
+The first `develop` build for a platform establishes its baseline, so an
+earlier pull request can show `baseline pending`.
 
 ## Notes
 
