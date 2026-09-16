@@ -1,7 +1,7 @@
 /* eslint no-console:0, no-process-env:0 */
 'use strict';
 
-var test = require('tape');
+var test = require('./lib/test');
 
 var wrtc = require('..');
 

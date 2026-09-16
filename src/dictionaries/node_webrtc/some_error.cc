@@ -46,6 +46,9 @@ CONVERTER_IMPL(const webrtc::RTCError*, SomeError, error) {
     case webrtc::RTCErrorType::OPERATION_ERROR_WITH_DATA:
       type = MakeLeft<ErrorFactory::ErrorName>(ErrorFactory::DOMExceptionName::kOperationError);
       break;
+    default:
+      type = MakeRight<ErrorFactory::DOMExceptionName>(ErrorFactory::ErrorName::kError);
+      break;
   }
   return Pure(SomeError(error->message(), type));
 }
@@ -67,6 +70,8 @@ TO_NAPI_IMPL(SomeError, pair) {
         return ErrorFactory::CreateNetworkError(env, message);
       case ErrorFactory::DOMExceptionName::kOperationError:
         return ErrorFactory::CreateOperationError(env, message);
+      default:
+        return ErrorFactory::CreateError(env, message);
     }
   }, [env, message](auto name) {
     switch (name) {
@@ -76,6 +81,8 @@ TO_NAPI_IMPL(SomeError, pair) {
         return ErrorFactory::CreateRangeError(env, message);
       case ErrorFactory::ErrorName::kSyntaxError:
         return ErrorFactory::CreateSyntaxError(env, message);
+      default:
+        return ErrorFactory::CreateError(env, message);
     }
   })));
 }

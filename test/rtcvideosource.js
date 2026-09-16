@@ -1,7 +1,7 @@
 /* globals gc */
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const RTCVideoSource = require('..').nonstandard.RTCVideoSource;
 

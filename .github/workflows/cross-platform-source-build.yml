@@ -68,6 +68,14 @@ jobs:
             platform_patch_1: cmake/webrtc-linux.cmake
             platform_patch_2: cmake/webrtc-linux.cmake
             legacy_artifact: ""
+          - os: ubuntu-24.04-arm
+            node: 26
+            generator: Ninja
+            webrtc_config: cmake/webrtc-linux.cmake
+            script_suffix: sh
+            platform_patch_1: cmake/webrtc-linux.cmake
+            platform_patch_2: cmake/webrtc-linux.cmake
+            legacy_artifact: ""
           - os: windows-2022
             node: 26
             generator: Ninja
@@ -84,6 +92,14 @@ jobs:
             platform_patch_1: scripts/patch-webrtc-apple-clt.py
             platform_patch_2: scripts/patch-webrtc-apple-clt-modern.py
             legacy_artifact: libwebrtc-macOS-ARM64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-macos26
+          - os: macos-15-intel
+            node: 26
+            generator: Ninja
+            webrtc_config: cmake/webrtc-macos.cmake
+            script_suffix: sh
+            platform_patch_1: scripts/patch-webrtc-apple-clt.py
+            platform_patch_2: scripts/patch-webrtc-apple-clt-modern.py
+            legacy_artifact: ""
 
     steps:
       - name: Checkout
@@ -218,6 +234,30 @@ jobs:
       - name: Run native test suite
         run: npm test
 
+      - name: Setup minimum supported Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.15
+
+      - name: Verify minimum supported Node.js
+        run: |
+          node -e "const wrtc=require('./'); console.log('wrtc ok on', process.version, !!wrtc);"
+          npm test
+
+      - name: Restore build Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Initialize Web Platform Tests
+        if: runner.os == 'Linux'
+        run: npm run wpt:init
+
+      - name: Run Web Platform Tests
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: npm run wpt:test
+
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
 
@@ -291,6 +331,64 @@ jobs:
           path: build/stage/**/*.tar.gz
           if-no-files-found: error
 
+  native-sanitizers:
+    name: Linux native sanitizers
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    needs: source-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
+
+      - name: Download matching WebRTC prebuilt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', 'scripts/stage-webrtc-prebuilt.js') }}
+        run: |
+          artifact_name="$ARTIFACT_NAME-${ImageOS:-unknown}"
+          run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+          )"
+          if [ -z "$run_id" ]; then
+            echo "No matching Linux WebRTC prebuilt found" >&2
+            exit 1
+          fi
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir build/external/libwebrtc
+
+      - name: Prepare dependencies
+        run: |
+          node scripts/prepare-webrtc-prebuilt.js
+          npm install --ignore-scripts
+
+      - name: Build addon with sanitizers
+        env:
+          CMAKE_GENERATOR: Ninja
+          SKIP_DOWNLOAD: true
+          WEBRTC_PREBUILT: 1
+          WRTC_ENABLE_SANITIZERS: 1
+        run: npm run build
+
+      - name: Run native suite with sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: |
+          export LD_PRELOAD="$(cc -print-file-name=libasan.so)"
+          npm test
+
   benchmark-report:
     name: Visual benchmark report
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -359,9 +457,16 @@ jobs:
     permissions:
       actions: read
       contents: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Setup Node.js for release
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.15
+          registry-url: https://registry.npmjs.org
 
       - name: Download exact-tree PR artifacts
         env:
@@ -384,7 +489,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
             )"
-            if [ "$artifact_count" -eq 3 ]; then
+            if [ "$artifact_count" -eq 5 ]; then
               build_run_id="$run_id"
               break
             fi
@@ -400,7 +505,7 @@ jobs:
           )
 
           if [ -z "$build_run_id" ]; then
-            echo "No successful PR build with three live artifacts matches tree $tag_tree" >&2
+            echo "No successful PR build with five live artifacts matches tree $tag_tree" >&2
             exit 1
           fi
 
@@ -420,8 +525,8 @@ jobs:
           fi
 
           asset_count="$(find release-assets -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
-          if [ "$asset_count" -ne 3 ]; then
-            echo "Expected 3 native archives, found $asset_count" >&2
+          if [ "$asset_count" -ne 5 ]; then
+            echo "Expected 5 native archives, found $asset_count" >&2
             find release-assets -type f -print
             exit 1
           fi
@@ -430,12 +535,21 @@ jobs:
             tar -tzf "$asset" | grep -qx 'Release/wrtc.node'
           done < <(find release-assets -type f -name '*.tar.gz' | sort)
 
+      - name: Generate checksums and SBOM
+        shell: bash
+        run: |
+          npm install --ignore-scripts
+          find release-assets -type f -name '*.tar.gz' -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > release-assets/SHA256SUMS
+          npm sbom --sbom-format cyclonedx > release-assets/sbom.cdx.json
+
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          mapfile -t assets < <(find release-assets -type f -name '*.tar.gz' | sort)
+          mapfile -t assets < <(find release-assets -type f \( -name '*.tar.gz' -o -name 'SHA256SUMS' -o -name 'sbom.cdx.json' \) | sort)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
@@ -444,3 +558,17 @@ jobs:
               --generate-notes \
               --title "@vandeurenglenn/wrtc $GITHUB_REF_NAME"
           fi
+
+      - name: Verify the published install path
+        shell: bash
+        run: |
+          node scripts/publish-to-npm.js --pack "$RUNNER_TEMP/release-package"
+          package_archive="$(find "$RUNNER_TEMP/release-package" -type f -name '*.tgz' -print -quit)"
+          install_dir="$(mktemp -d)"
+          cd "$install_dir"
+          npm init -y >/dev/null
+          npm install "$package_archive"
+          node -e "import('@vandeurenglenn/wrtc').then(wrtc => console.log('installed release ok', !!wrtc))"
+
+      - name: Publish package to npm with provenance
+        run: node scripts/publish-to-npm.js --provenance

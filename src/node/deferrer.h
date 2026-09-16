@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mutex>
+#include <atomic>
 
 #include <node-addon-api/napi.h>
 
@@ -20,7 +20,7 @@ class Deferrer {
   static void CallExecute(napi_env, napi_status, void*);
   Napi::Env _env;
   napi_async_work _work = nullptr;
-  std::mutex _work_mutex{};
+  std::atomic<bool> _queued{false};
 };
 
 }  // namespace node_webrtc

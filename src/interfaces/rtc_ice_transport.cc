@@ -173,12 +173,15 @@ Napi::Value RTCIceTransport::GetGatheringState(const Napi::CallbackInfo& info) {
   webrtc::PeerConnectionInterface::IceGatheringState state;
   switch (_gathering_state) {
     case webrtc::IceGatheringState::kIceGatheringNew:
-      state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
+      state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringNew;
       break;
     case webrtc::IceGatheringState::kIceGatheringGathering:
-      state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
+      state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringGathering;
       break;
     case webrtc::IceGatheringState::kIceGatheringComplete:
+      state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
+      break;
+    default:
       state = webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringComplete;
       break;
   }

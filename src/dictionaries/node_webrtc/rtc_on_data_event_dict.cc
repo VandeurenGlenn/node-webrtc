@@ -71,7 +71,7 @@ TO_NAPI_IMPL(RTC_ON_DATA_EVENT_DICT, pair) {
   Napi::EscapableHandleScope scope(env);
 
   auto dict = pair.second;
-  std::unique_ptr<uint8_t> samples(dict.samples);
+  std::unique_ptr<uint8_t[]> samples(dict.samples);
 
   if (dict.numberOfFrames.IsNothing()) {
     return Validation<Napi::Value>::Invalid("numberOfFrames not provided");
@@ -81,7 +81,7 @@ TO_NAPI_IMPL(RTC_ON_DATA_EVENT_DICT, pair) {
   auto length = dict.channelCount * numberOfFrames;
   auto byteLength = length * dict.bitsPerSample / 8;
   auto maybeArrayBuffer = Napi::ArrayBuffer::New(env, samples.release(), byteLength, [](Napi::Env, void* samples) {
-    delete static_cast<uint8_t*>(samples);
+    delete[] static_cast<uint8_t*>(samples);
   });
   if (maybeArrayBuffer.Env().IsExceptionPending()) {
     return Validation<Napi::Value>::Invalid(maybeArrayBuffer.Env().GetAndClearPendingException().Message());

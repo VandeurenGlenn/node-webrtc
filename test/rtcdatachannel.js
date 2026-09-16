@@ -1,6 +1,6 @@
 'use strict';
 
-const tape = require('tape');
+const tape = require('./lib/test');
 const { RTCPeerConnection } = require('..');
 
 tape('Calling .send(message) when .readyState is "closed" throws InvalidStateError', t => {

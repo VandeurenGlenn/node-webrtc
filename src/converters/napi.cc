@@ -100,15 +100,20 @@ FROM_NAPI_IMPL(uint64_t, value) {
     return Validation<uint64_t>::Invalid(maybeNumber.Env().GetAndClearPendingException().Message());
   }
   auto doubleValue = maybeNumber.DoubleValue();
-  if (doubleValue < 0 || doubleValue > UINT64_MAX) {
-    return Validation<uint64_t>::Invalid("Expected a 64-bit unsigned integer");
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  if (doubleValue < 0 || doubleValue > kMaxSafeInteger) {
+    return Validation<uint64_t>::Invalid("Expected a safe unsigned integer");
   }
   return Pure(static_cast<uint64_t>(maybeNumber.DoubleValue()));
 }
 
 TO_NAPI_IMPL(uint64_t, pair) {
+  constexpr uint64_t kMaxSafeInteger = 9007199254740991ULL;
+  if (pair.second > kMaxSafeInteger) {
+    return Validation<Napi::Value>::Invalid("64-bit unsigned integer exceeds JavaScript's safe integer range");
+  }
   Napi::EscapableHandleScope scope(pair.first);
-  return Pure(scope.Escape(Napi::Number::New(pair.first, pair.second).As<Napi::Value>()));
+  return Pure(scope.Escape(Napi::Number::New(pair.first, static_cast<double>(pair.second)).As<Napi::Value>()));
 }
 
 FROM_NAPI_IMPL(int8_t, value) {
@@ -175,15 +180,20 @@ FROM_NAPI_IMPL(int64_t, value) {
     return Validation<int64_t>::Invalid(maybeNumber.Env().GetAndClearPendingException().Message());
   }
   auto doubleValue = maybeNumber.DoubleValue();
-  if (doubleValue < INT64_MIN || doubleValue > INT64_MAX) {
-    return Validation<int64_t>::Invalid("Expected a 64-bit integer");
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  if (doubleValue < -kMaxSafeInteger || doubleValue > kMaxSafeInteger) {
+    return Validation<int64_t>::Invalid("Expected a safe integer");
   }
   return Pure(maybeNumber.Int64Value());
 }
 
 TO_NAPI_IMPL(int64_t, pair) {
+  constexpr int64_t kMaxSafeInteger = 9007199254740991LL;
+  if (pair.second < -kMaxSafeInteger || pair.second > kMaxSafeInteger) {
+    return Validation<Napi::Value>::Invalid("64-bit integer exceeds JavaScript's safe integer range");
+  }
   Napi::EscapableHandleScope scope(pair.first);
-  return Pure(scope.Escape(Napi::Number::New(pair.first, pair.second).As<Napi::Value>()));
+  return Pure(scope.Escape(Napi::Number::New(pair.first, static_cast<double>(pair.second)).As<Napi::Value>()));
 }
 
 FROM_NAPI_IMPL(std::string, value) {

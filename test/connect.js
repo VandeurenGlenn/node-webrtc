@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('tape');
+var test = require('./lib/test');
 
 var wrtc = require('..');
 
@@ -298,43 +298,6 @@ test('data channel connectivity', function(t) {
   });
 });
 
-test('getStats (legacy)', function(t) {
-  t.plan(2);
-
-  function getStats(peer, callback) {
-    peer.getStats(function(response) {
-      var reports = response.result();
-      callback(null, reports.map(function(report) {
-        var obj = {
-          timestamp: report.timestamp,
-          type: report.type
-        };
-        var names = report.names();
-        names.forEach(function(name) {
-          obj[name] = report.stat(name);
-        });
-        return obj;
-      }));
-    }, function(error) {
-      callback(error);
-    });
-  }
-
-  function done(error, reports) {
-    if (error) {
-      t.fail(error);
-      return;
-    }
-
-    console.log(reports);
-    t.pass('successfully called getStats (legacy)');
-  }
-
-  peers.forEach(function(peer) {
-    getStats(peer, done);
-  });
-});
-
 test('getStats', function(t) {
   t.plan(2);
 
@@ -389,7 +352,7 @@ test('close the connections', function(t) {
     } catch (error) {
       is_invalid_state(error);
     }
-    peers[i].getStats(function() {}, function(err) {
+    peers[i].getStats().catch(function(err) {
       t.ok(err);
     });
     peers[i].close();

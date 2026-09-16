@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.20)
 project(node-webrtc)
 
 include(ExternalProject)
@@ -8,6 +8,11 @@ find_program(iwyu_path OPTIONAL NAMES include-what-you-use iwyu)
 find_program(clang_tidy_path OPTIONAL NAMES clang-tidy)
 option(WRTC_ENABLE_IWYU "Run include-what-you-use while compiling the addon" OFF)
 option(WRTC_ENABLE_CLANG_TIDY "Run clang-tidy while compiling the addon" OFF)
+set(WRTC_ENABLE_SANITIZERS_DEFAULT OFF)
+if(DEFINED ENV{WRTC_ENABLE_SANITIZERS} AND "$ENV{WRTC_ENABLE_SANITIZERS}" STREQUAL "1")
+  set(WRTC_ENABLE_SANITIZERS_DEFAULT ON)
+endif()
+option(WRTC_ENABLE_SANITIZERS "Build the addon with address and undefined behavior sanitizers" ${WRTC_ENABLE_SANITIZERS_DEFAULT})
 
 set(WEBRTC_PREBUILT_DEFAULT OFF)
 if(DEFINED ENV{WEBRTC_PREBUILT} AND "$ENV{WEBRTC_PREBUILT}" STREQUAL "1")
@@ -251,6 +256,14 @@ list(FILTER MODULE_SRC EXCLUDE REGEX ".*/webrtc/test_audio_device_module\\.(cc|h
 add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
 
+if(WRTC_ENABLE_SANITIZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    message(FATAL_ERROR "WRTC_ENABLE_SANITIZERS requires Clang or GCC")
+  endif()
+  target_compile_options(${MODULE} PRIVATE -fno-omit-frame-pointer -fsanitize=address,undefined)
+  target_link_options(${MODULE} PRIVATE -fno-omit-frame-pointer -fsanitize=address,undefined)
+endif()
+
 # The JavaScript loader and node-pre-gyp packaging both expect the Windows
 # addon in build/Release. Multi-config Visual Studio generators put it there
 # automatically, while the single-config Ninja generator otherwise writes it
@@ -366,6 +379,9 @@ elseif(APPLE)
     -Wno-suggest-override
     -Wpedantic
     -Wno-missing-prototypes
+    -Wno-covered-switch-default
+    -Wno-nrvo
+    -Wno-poison-system-directories
   )
 
   target_compile_definitions(${MODULE} PRIVATE

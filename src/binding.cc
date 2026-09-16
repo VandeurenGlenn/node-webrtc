@@ -9,7 +9,6 @@
 #include <assert.h>
 #include <uv.h>
 
-#include "src/interfaces/legacy_rtc_stats_report.h"
 #include "src/interfaces/media_stream.h"
 #include "src/interfaces/media_stream_track.h"
 #include "src/interfaces/rtc_audio_sink.h"
@@ -23,7 +22,6 @@
 #include "src/interfaces/rtc_rtp_sender.h"
 #include "src/interfaces/rtc_rtp_transceiver.h"
 #include "src/interfaces/rtc_sctp_transport.h"
-#include "src/interfaces/rtc_stats_response.h"
 #include "src/interfaces/rtc_video_sink.h"
 #include "src/interfaces/rtc_video_source.h"
 #include "src/methods/get_display_media.h"
@@ -47,7 +45,6 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
   node_webrtc::GetDisplayMedia::Init(env, exports);
   node_webrtc::GetUserMedia::Init(env, exports);
   node_webrtc::I420Helpers::Init(env, exports);
-  node_webrtc::LegacyStatsReport::Init(env, exports);
   node_webrtc::MediaStream::Init(env, exports);
   node_webrtc::MediaStreamTrack::Init(env, exports);
   node_webrtc::PeerConnectionFactory::Init(env, exports);
@@ -61,7 +58,6 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
   node_webrtc::RTCRtpSender::Init(env, exports);
   node_webrtc::RTCRtpTransceiver::Init(env, exports);
   node_webrtc::RTCSctpTransport::Init(env, exports);
-  node_webrtc::RTCStatsResponse::Init(env, exports);
   node_webrtc::RTCVideoSink::Init(env, exports);
   node_webrtc::RTCVideoSource::Init(env, exports);
 #ifdef DEBUG

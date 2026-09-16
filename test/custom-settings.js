@@ -1,7 +1,7 @@
 /* eslint no-console:0 */
 'use strict';
 
-var tape = require('tape');
+var tape = require('./lib/test');
 var SimplePeer = require('simple-peer');
 var wrtc = require('..');
 

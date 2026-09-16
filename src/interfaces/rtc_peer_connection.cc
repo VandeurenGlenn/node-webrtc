@@ -536,22 +536,6 @@ Napi::Value RTCPeerConnection::GetStats(const Napi::CallbackInfo& info) {
   return deferred.Promise();  // NOLINT
 }
 
-Napi::Value RTCPeerConnection::LegacyGetStats(const Napi::CallbackInfo& info) {
-  auto env = info.Env();
-
-  CREATE_DEFERRED(env, deferred)
-
-  if (!_jinglePeerConnection) {
-    Reject(deferred, ErrorFactory::CreateError(env, "RTCPeerConnection is closed"));
-    return deferred.Promise();
-  }
-
-  auto callback = new rtc::RefCountedObject<LegacyRTCStatsCollector>(this, deferred);
-  _jinglePeerConnection->GetStats(callback);
-
-  return deferred.Promise();  // NOLINT
-}
-
 Napi::Value RTCPeerConnection::GetTransceivers(const Napi::CallbackInfo& info) {
   std::vector<RTCRtpTransceiver*> transceivers;
   if (_jinglePeerConnection
@@ -728,7 +712,6 @@ void RTCPeerConnection::Init(Napi::Env env, Napi::Object exports) {
     InstanceMethod("getReceivers", &RTCPeerConnection::GetReceivers),
     InstanceMethod("getSenders", &RTCPeerConnection::GetSenders),
     InstanceMethod("getStats", &RTCPeerConnection::GetStats),
-    InstanceMethod("legacyGetStats", &RTCPeerConnection::LegacyGetStats),
     InstanceMethod("getTransceivers", &RTCPeerConnection::GetTransceivers),
     InstanceMethod("updateIce", &RTCPeerConnection::UpdateIce),
     InstanceMethod("addIceCandidate", &RTCPeerConnection::AddIceCandidate),

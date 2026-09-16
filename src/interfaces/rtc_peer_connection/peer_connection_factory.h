@@ -30,7 +30,7 @@ class PeerConnectionFactory
  public:
   explicit PeerConnectionFactory(const Napi::CallbackInfo&);
 
-  ~PeerConnectionFactory();
+  ~PeerConnectionFactory() override;
 
   /**
    * Get or create the default PeerConnectionFactory. The default uses

@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const { RTCVideoSink, RTCVideoSource } = require('..').nonstandard;
 const { I420Frame } = require('./lib/frame');

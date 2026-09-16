@@ -20,7 +20,8 @@ node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
 
 ## Prerequisites
 
-All platforms require Git, CMake, Node.js, and npm. In addition, install:
+All platforms require Git, CMake 3.20 or newer, Node.js 24.15 or newer, and
+npm. In addition, install:
 
 * Linux: Ninja and the standard C++ development packages.
 * macOS: Xcode Command Line Tools and Ninja.
@@ -90,6 +91,13 @@ Run the native unit and integration tests with:
 ```sh
 npm test
 ```
+
+Each native test has a 30-second timeout. Override it for slow diagnostic
+runs with `WRTC_TEST_TIMEOUT`, expressed in milliseconds.
+
+On Linux, build the addon with AddressSanitizer and UndefinedBehaviorSanitizer
+enabled by setting `WRTC_ENABLE_SANITIZERS=1`. CI runs this configuration
+against the complete native suite.
 
 Run the Web Platform Tests with:
 

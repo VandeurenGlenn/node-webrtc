@@ -35,7 +35,7 @@ class EventLoop: private EventQueue<T> {
     auto status = napi_get_uv_event_loop(_env, &loop);
     {
       using Napi::Error;
-      NAPI_THROW_IF_FAILED_VOID(_env, status);
+      NAPI_THROW_IF_FAILED_VOID(_env, status)
     }
 
     uv_async_init(loop, &_async, [](auto handle) {

@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const RTCPeerConnection = require('..').RTCPeerConnection;
 

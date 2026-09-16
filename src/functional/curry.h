@@ -15,33 +15,33 @@
 
 #include <functional>
 
-namespace _dtl {
+namespace curry_detail {
 
 template <typename FUNCTION>
-struct _curry;
+struct Curry;
 
 // specialization for functions with a single argument
 template <typename R, typename T>
-struct _curry<std::function<R(T)>> {
+struct Curry<std::function<R(T)>> {
   using type = std::function<R(T)>;
 
   const type result;
 
-  explicit _curry(type fun): result(fun) {}
+  explicit Curry(type fun): result(fun) {}
 };
 
 // recursive specialization for functions with more arguments
 template <typename R, typename T, typename...Ts> struct
-_curry<std::function<R(T, Ts...)>> {
-  using remaining_type = typename _curry<std::function<R(Ts...)>>::type;
+Curry<std::function<R(T, Ts...)>> {
+  using remaining_type = typename Curry<std::function<R(Ts...)>>::type;
 
   using type = std::function<remaining_type(T)>;
 
   const type result;
 
-  explicit _curry(const std::function<R(T, Ts...)>& fun): result(
+  explicit Curry(const std::function<R(T, Ts...)>& fun): result(
         [ = ](const T & t) {
-    return _curry<std::function<R(Ts...)>>(
+    return Curry<std::function<R(Ts...)>>(
     [ = ](const Ts & ...ts) {
       return fun(t, ts...);
     }
@@ -50,14 +50,14 @@ _curry<std::function<R(T, Ts...)>> {
   ) {}
 };
 
-}  // namespace _dtl
+}  // namespace curry_detail
 
 template <typename R, typename...Ts>
-auto curry(const std::function<R(Ts...)>& fun) -> typename _dtl::_curry<std::function<R(Ts...)>>::type {
-  return _dtl::_curry<std::function<R(Ts...)>>(fun).result;
+auto curry(const std::function<R(Ts...)>& fun) -> typename curry_detail::Curry<std::function<R(Ts...)>>::type {
+  return curry_detail::Curry<std::function<R(Ts...)>>(fun).result;
 }
 
 template <typename R, typename...Ts>
-auto curry(R(* const fun)(Ts...)) -> typename _dtl::_curry<std::function<R(Ts...)>>::type {
-  return _dtl::_curry<std::function<R(Ts...)>>(fun).result;
+auto curry(R(* const fun)(Ts...)) -> typename curry_detail::Curry<std::function<R(Ts...)>>::type {
+  return curry_detail::Curry<std::function<R(Ts...)>>(fun).result;
 }

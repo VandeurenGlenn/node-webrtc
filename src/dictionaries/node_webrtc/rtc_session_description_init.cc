@@ -43,6 +43,9 @@ CONVERTER_IMPL(RTCSessionDescriptionInit, webrtc::SessionDescriptionInterface*, 
       break;
     case RTCSdpType::kRollback:
       type_ = webrtc::SdpType::kRollback;
+      break;
+    default:
+      return Validation<webrtc::SessionDescriptionInterface*>::Invalid("Unsupported SDP type");
   }
   webrtc::SdpParseError error;
   auto description = webrtc::CreateSessionDescription(type_, init.sdp, &error);

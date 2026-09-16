@@ -1,7 +1,7 @@
 'use strict';
 
 const { performance } = require('perf_hooks');
-const tape = require('tape');
+const tape = require('./lib/test');
 
 const { RTCVideoSink, RTCVideoSource } = require('..').nonstandard;
 

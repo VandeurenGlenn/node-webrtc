@@ -106,8 +106,10 @@ void RTCDataChannel::CleanupInternals() {
   _jingleDataChannel->UnregisterObserver();
   _cached_id = _jingleDataChannel->id();
   _cached_label = _jingleDataChannel->label();
-  _cached_max_packet_life_time = _jingleDataChannel->maxPacketLifeTime().value_or(UINT16_MAX);
-  _cached_max_retransmits = _jingleDataChannel->maxRetransmitsOpt().value_or(UINT16_MAX);
+  _cached_max_packet_life_time = static_cast<uint16_t>(
+      _jingleDataChannel->maxPacketLifeTime().value_or(UINT16_MAX));
+  _cached_max_retransmits = static_cast<uint16_t>(
+      _jingleDataChannel->maxRetransmitsOpt().value_or(UINT16_MAX));
   _cached_negotiated = _jingleDataChannel->negotiated();
   _cached_ordered = _jingleDataChannel->ordered();
   _cached_protocol = _jingleDataChannel->protocol();
