@@ -325,7 +325,7 @@ test('getStats (legacy)', function(t) {
       t.fail(error);
       return;
     }
-    // eslint-disable-next-line no-console
+
     console.log(reports);
     t.pass('successfully called getStats (legacy)');
   }
@@ -351,7 +351,7 @@ test('getStats', function(t) {
       t.fail(error);
       return;
     }
-    // eslint-disable-next-line no-console
+
     console.log(reports);
     t.pass('successfully called getStats');
   }

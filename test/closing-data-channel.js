@@ -2,6 +2,7 @@
 
 var test = require('tape');
 var RTCPeerConnection = require('..').RTCPeerConnection;
+var relayIceCandidate = require('./lib/pc').relayIceCandidate;
 
 test('make sure closing an RTCDataChannel after an RTCPeerConnection has been garbage collected doesn\'t segfault', function(t) {
   var dc = (function() {
@@ -23,9 +24,7 @@ test('ensure that RTCDataChannel open is not called during closing state', funct
 
   [[peer1, peer2], [peer2, peer1]].forEach(function(peers) {
     peers[0].onicecandidate = function(event) {
-      if (event.candidate) {
-        peers[1].addIceCandidate(event.candidate);
-      }
+      relayIceCandidate(peers[1], event.candidate);
     };
   });
 

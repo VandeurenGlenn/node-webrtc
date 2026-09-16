@@ -4,9 +4,13 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const enableDestroy = require('server-destroy');
-const request = require('request');
 const { JSDOM } = require('jsdom');
-const { Canvas } = require('jsdom/lib/jsdom/utils');
+let Canvas = null;
+try {
+  ({ Canvas } = require('canvas'));
+} catch (error) {
+  // canvas is optional; tests that require it are skipped.
+}
 
 function toPathname(dirname, relativePath) {
   let pathname = path.resolve(dirname, relativePath).replace(/\\/g, '/');
@@ -158,16 +162,18 @@ exports.getTestFixtureUrl = relativePath => {
 exports.readTestFixture = relativePath => {
   const useRequest = exports.inBrowserContext();
 
-  return exports.nodeResolverPromise(nodeResolver => {
-    if (useRequest) {
-      request.get(exports.getTestFixtureUrl(relativePath), { timeout: 5000 }, nodeResolver);
-    } else {
-      fs.readFile(path.resolve(__dirname, relativePath), { encoding: 'utf8' }, nodeResolver);
-    }
-  })
-  // request passes (error, response, content) to the callback
-  // we are only interested in the `content`
-    .then(result => useRequest ? result[1] : result);
+  if (useRequest) {
+    return fetch(exports.getTestFixtureUrl(relativePath), {
+      signal: AbortSignal.timeout(5000)
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error(`Unable to load fixture: HTTP ${response.status}`);
+      }
+      return response.text();
+    });
+  }
+
+  return fs.promises.readFile(path.resolve(__dirname, relativePath), 'utf8');
 };
 
 exports.isCanvasInstalled = (t, done) => {

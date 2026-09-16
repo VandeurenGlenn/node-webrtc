@@ -3,6 +3,7 @@
 const tape = require('tape');
 
 const { RTCPeerConnection } = require('..');
+const { relayIceCandidate } = require('./lib/pc');
 
 // NOTE(mroberts): These limits were tested on macOS.
 const maxOrderedAndReliableSize = 262144;
@@ -13,9 +14,7 @@ async function test(t, size, options) {
   const pc2 = new RTCPeerConnection();
   [[pc1, pc2], [pc2, pc1]].forEach(([pc1, pc2]) => {
     pc1.onicecandidate = ({ candidate }) => {
-      if (candidate) {
-        pc2.addIceCandidate(candidate);
-      }
+      relayIceCandidate(pc2, candidate);
     };
   });
 

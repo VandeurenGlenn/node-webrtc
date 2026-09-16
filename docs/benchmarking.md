@@ -13,7 +13,7 @@ All metrics are lower-is-better.
 
 ## Commands
 
-The benchmark flow requires Node.js 20 or newer and a built or installed native
+The benchmark flow requires Node.js 24.15 or newer and a built or installed native
 addon.
 
 Run a benchmark and store timestamped results:

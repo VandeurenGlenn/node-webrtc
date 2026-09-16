@@ -98,10 +98,4 @@ npm run wpt:init
 npm run wpt:test
 ```
 
-The browser-facing test suite can be run with:
-
-```sh
-npm run test:browsers
-```
-
 For benchmark instructions, see [benchmarking.md](benchmarking.md).

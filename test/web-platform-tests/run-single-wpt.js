@@ -1,13 +1,12 @@
 'use strict';
-/* eslint-disable no-console */
+
 const path = require('path');
+const fs = require('fs');
 const { URL } = require('url');
-const { specify } = require('mocha-sugar-free');
+const { it } = require('mocha');
 const { inBrowserContext } = require('./util.js');
-const { JSDOM, VirtualConsole } = require('jsdom/lib/api.js');
-const ResourceLoader = require('jsdom/lib/jsdom/browser/resources/resource-loader');
+const { JSDOM, VirtualConsole, requestInterceptor } = require('jsdom');
 const wrtc = require('../..');
-const fetch = require('node-fetch');
 
 const reporterPathname = '/resources/testharnessreport.js';
 
@@ -19,43 +18,34 @@ module.exports = urlPrefixFactory => {
   }
 
   return (testPath, title = testPath, expectFail) => {
-    specify({
-      title,
-      expectPromise: true,
-      // WPT also takes care of timeouts (maximum 60 seconds), this is an extra failsafe:
-      timeout: 70000,
-      slow: 10000,
-      skipIfBrowser: true,
-      fn() {
-        return createJSDOM(urlPrefixFactory(), testPath, expectFail);
-      }
+    it(title, function() {
+      this.timeout(70000);
+      this.slow(10000);
+      return createJSDOM(urlPrefixFactory(), testPath, expectFail);
     });
   };
 };
 
-class CustomResourceLoader extends ResourceLoader {
-  constructor() {
-    super({ strictSSL: false });
+const resourceInterceptor = requestInterceptor(async request => {
+  const url = new URL(request.url);
+
+  if (url.pathname === reporterPathname) {
+    return new Response('window.shimTest();', {
+      headers: { 'Content-Type': 'application/javascript' }
+    });
+  } else if (url.pathname.startsWith('/resources/')) {
+    // When running to-upstream tests, the server doesn't have a /resources/ directory.
+    // So, always go to the one in ./tests.
+    // The path replacement accounts for a rewrite performed by the WPT server:
+    // https://github.com/w3c/web-platform-tests/blob/master/tools/serve/serve.py#L271
+    const filePath = path.resolve(__dirname, 'tests' + url.pathname)
+      .replace('/resources/WebIDLParser.js', '/resources/webidl2/lib/webidl2.js');
+    const body = await fs.promises.readFile(filePath);
+    return new Response(body);
   }
-  fetch(urlString, options) {
-    const url = new URL(urlString);
 
-    if (url.pathname === reporterPathname) {
-      return Promise.resolve(Buffer.from('window.shimTest();', 'utf-8'));
-    } else if (url.pathname.startsWith('/resources/')) {
-      // When running to-upstream tests, the server doesn't have a /resources/ directory.
-      // So, always go to the one in ./tests.
-      // The path replacement accounts for a rewrite performed by the WPT server:
-      // https://github.com/w3c/web-platform-tests/blob/master/tools/serve/serve.py#L271
-      const filePath = path.resolve(__dirname, 'tests' + url.pathname)
-        .replace('/resources/WebIDLParser.js', '/resources/webidl2/lib/webidl2.js');
-
-      return super.fetch(`file://${filePath}`, options);
-    }
-
-    return super.fetch(urlString, options);
-  }
-}
+  return undefined;
+});
 
 function createJSDOM(urlPrefix, testPath, expectFail) {
   const unhandledExceptions = [];
@@ -63,7 +53,7 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
 
   let allowUnhandledExceptions = false;
 
-  const virtualConsole = new VirtualConsole().sendTo(console, { omitJSDOMErrors: true });
+  const virtualConsole = new VirtualConsole().forwardTo(console, { jsdomErrors: 'none' });
   virtualConsole.on('jsdomError', e => {
     if (e.type === 'unhandled exception' && !allowUnhandledExceptions) {
       unhandledExceptions.push(e);
@@ -80,7 +70,7 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
   return JSDOM.fromURL(urlPrefix + testPath, {
     runScripts: 'dangerously',
     virtualConsole,
-    resources: new CustomResourceLoader(),
+    resources: { interceptors: [resourceInterceptor] },
     pretendToBeVisual: true,
     storageQuota: 100000 // Filling the default quota takes about a minute between two WPTs
   })

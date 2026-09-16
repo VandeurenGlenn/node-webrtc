@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "child_process";
-import { readFileSync, writeFileSync } from "fs";
+import { cp, mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { createRequire } from "module";
+import { tmpdir } from "os";
 import { join } from "path";
 import { fileURLToPath } from "url";
 
 const require = createRequire(import.meta.url);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const copy = require("recursive-copy");
-const temp = require("temp");
 const rootPackageJson = require("../package.json");
-
-temp.track();
 
 const githubUrl =
   "https://github.com/VandeurenGlenn/node-webrtc/blob/v" +
@@ -48,27 +45,17 @@ const jsonFields = [
 
 const relativeLinks = ["docs/build-from-source.md", "docs/nonstandard-apis.md"];
 
-function mkTmpDir(dir) {
-  return new Promise((resolve, reject) => {
-    temp.mkdir(dir, (error, dir) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(dir);
-      }
-    });
-  });
-}
-
 async function main() {
   const { name } = rootPackageJson;
-  const tmpDir = await mkTmpDir(name);
+  const packageDirectory = await mkdtemp(
+    join(tmpdir(), `${name.replaceAll("/", "-")}-`),
+  );
 
   await Promise.all(
     paths.map(async (path) => {
       const src = join(__dirname, "..", path);
-      const dst = join(tmpDir, path);
-      await copy(src, dst);
+      const dst = join(packageDirectory, path);
+      await cp(src, dst, { recursive: true });
     }),
   );
 
@@ -76,8 +63,8 @@ async function main() {
   jsonFields.forEach((jsonField) => {
     packageJson[jsonField] = rootPackageJson[jsonField];
   });
-  writeFileSync(
-    join(tmpDir, "package.json"),
+  await writeFile(
+    join(packageDirectory, "package.json"),
     JSON.stringify(packageJson, null, 2),
   );
 
@@ -89,20 +76,21 @@ async function main() {
       );
       return readme.replace(regexp, githubUrl + "/$1");
     },
-    readFileSync(join(__dirname, "..", "README.md")).toString(),
+    (await readFile(join(__dirname, "..", "README.md"))).toString(),
   );
 
-  writeFileSync(join(tmpDir, "README.md"), readme);
+  await writeFile(join(packageDirectory, "README.md"), readme);
 
   const publishArgs = ["publish", "--access", "public"];
   if (process.argv.includes("--dry-run")) {
     publishArgs.push("--dry-run");
   }
-  const { status } = spawnSync("npm", publishArgs, {
-    shell: true,
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const { status } = spawnSync(npmCommand, publishArgs, {
     stdio: "inherit",
-    cwd: tmpDir,
+    cwd: packageDirectory,
   });
+  await rm(packageDirectory, { recursive: true, force: true });
   if (status) {
     throw new Error("npm publish failed");
   }

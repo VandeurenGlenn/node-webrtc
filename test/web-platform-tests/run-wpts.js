@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const jsYAML = require('js-yaml');
 const { Minimatch } = require('minimatch');
-const { describe, specify, before } = require('mocha-sugar-free');
+const { before, describe, it } = require('mocha');
 const { readManifest, getPossibleTestFilePaths, stripPrefix } = require('./wpt-manifest-utils.js');
 const startWPTServer = require('./start-wpt-server.js');
 
@@ -26,7 +26,7 @@ const possibleTestFilePaths = getPossibleTestFilePaths(manifest);
 
 const toRunFilename = path.resolve(__dirname, 'to-run.yaml');
 const toRunString = fs.readFileSync(toRunFilename, { encoding: 'utf-8' });
-const toRunDocs = jsYAML.safeLoadAll(toRunString, { filename: toRunFilename });
+const toRunDocs = jsYAML.loadAll(toRunString, { filename: toRunFilename });
 
 const minimatchers = new Map();
 
@@ -34,7 +34,8 @@ checkToRun();
 
 let wptServerURL;
 const runSingleWPT = require('./run-single-wpt.js')(() => wptServerURL);
-before({ timeout: 30 * 1000 }, () => {
+before(function() {
+  this.timeout(30 * 1000);
   return startWPTServer({ toUpstream: false }).then(url => {
     wptServerURL = url;
   });
@@ -58,7 +59,7 @@ describe('web-platform-tests', () => {
                              (reason === 'needs-node11' && !hasNode11);
 
           if (matchingPattern && shouldSkip) {
-            specify.skip(`[${reason}] ${testFile}`);
+            it.skip(`[${reason}] ${testFile}`);
           } else if (expectFail) {
             runSingleWPT(testFilePath, `[expected fail] ${testFile}`, expectFail);
           } else {
