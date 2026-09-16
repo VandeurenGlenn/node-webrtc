@@ -1,13 +1,11 @@
 'use strict';
-/* eslint-disable no-console */
+
 const path = require('path');
 const { URL } = require('url');
-const { specify } = require('mocha-sugar-free');
+const { it } = require('mocha');
 const { inBrowserContext } = require('./util.js');
-const { JSDOM, VirtualConsole } = require('jsdom/lib/api.js');
-const ResourceLoader = require('jsdom/lib/jsdom/browser/resources/resource-loader');
+const { JSDOM, ResourceLoader, VirtualConsole } = require('jsdom');
 const wrtc = require('../..');
-const fetch = require('node-fetch');
 
 const reporterPathname = '/resources/testharnessreport.js';
 
@@ -19,16 +17,10 @@ module.exports = urlPrefixFactory => {
   }
 
   return (testPath, title = testPath, expectFail) => {
-    specify({
-      title,
-      expectPromise: true,
-      // WPT also takes care of timeouts (maximum 60 seconds), this is an extra failsafe:
-      timeout: 70000,
-      slow: 10000,
-      skipIfBrowser: true,
-      fn() {
-        return createJSDOM(urlPrefixFactory(), testPath, expectFail);
-      }
+    it(title, function() {
+      this.timeout(70000);
+      this.slow(10000);
+      return createJSDOM(urlPrefixFactory(), testPath, expectFail);
     });
   };
 };
@@ -63,7 +55,7 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
 
   let allowUnhandledExceptions = false;
 
-  const virtualConsole = new VirtualConsole().sendTo(console, { omitJSDOMErrors: true });
+  const virtualConsole = new VirtualConsole().forwardTo(console, { jsdomErrors: 'none' });
   virtualConsole.on('jsdomError', e => {
     if (e.type === 'unhandled exception' && !allowUnhandledExceptions) {
       unhandledExceptions.push(e);

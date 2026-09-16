@@ -1,12 +1,9 @@
 'use strict';
-/* eslint-disable no-console, global-require */
+
 const path = require('path');
-const dns = require('dns');
+const dns = require('dns').promises;
 const childProcess = require('child_process');
-const q = require('q');
 const { inBrowserContext } = require('./util.js');
-const requestHead = require('request-promise-native').head;
-const dnsLookup = q.denodeify(dns.lookup);
 
 const wptDir = path.resolve(__dirname, 'tests');
 
@@ -31,7 +28,7 @@ module.exports = ({ toUpstream = false } = {}) => {
 
   const urlPrefix = `http://${config.browser_host}:${config.ports.http[0]}/`;
 
-  return dnsLookup('web-platform.test').then(
+  return dns.lookup('web-platform.test').then(
     () => {
       const configArg = path.relative(path.resolve(wptDir), configPath);
       const args = ['./wpt.py', 'serve', '--config', configArg];
@@ -62,13 +59,17 @@ module.exports = ({ toUpstream = false } = {}) => {
 };
 
 function pollForServer(url) {
-  return requestHead(url)
-    .then(() => {
+  return fetch(url, { method: 'HEAD' })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       console.log(`WPT server at ${url} is up!`);
       return url;
     })
     .catch(err => {
       console.log(`WPT server at ${url} is not up yet (${err.message}); trying again`);
-      return q.delay(500).then(() => pollForServer(url));
+      return new Promise(resolve => setTimeout(resolve, 500))
+        .then(() => pollForServer(url));
     });
 }

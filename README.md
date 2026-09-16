@@ -12,7 +12,7 @@ and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
 `clang-cl` on Windows, and its pinned toolchain on macOS. The addon and WebRTC
 share each platform's standard C++ library ABI.
 
-Node.js 20 or newer is required. The package uses the platform-provided
+Node.js 20.19 or newer is required. The package uses the platform-provided
 `DOMException` instead of the deprecated userland polyfill.
 
 Windows source builds use Visual Studio 2022 for CMake and the Node addon;
