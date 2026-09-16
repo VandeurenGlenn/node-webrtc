@@ -12,7 +12,6 @@ require("./get-configuration");
 require("./i420helpers");
 require("./iceservers");
 require("./mediastream");
-require("./multiconnect");
 require("./pass-interface-to-method");
 require("./process-exit");
 require("./rollback");

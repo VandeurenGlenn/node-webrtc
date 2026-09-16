@@ -212,6 +212,12 @@ jobs:
       - name: Smoke load addon
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"
 
+      - name: Install test dependencies
+        run: npm install --ignore-scripts
+
+      - name: Run native test suite
+        run: npm test
+
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
 

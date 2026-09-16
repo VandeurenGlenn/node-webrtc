@@ -13,8 +13,14 @@ function createRTCPeerConnections(configuration1 = {}, configuration2 = {}, opti
     if (options.handleIce) {
       [[pc1, pc2], [pc2, pc1]].forEach(([pcA, pcB]) => {
         pcA.addEventListener('icecandidate', ({ candidate }) => {
-          if (candidate) {
-            pcB.addIceCandidate(candidate);
+          if (candidate && pcB.signalingState !== 'closed') {
+            pcB.addIceCandidate(candidate).catch(error => {
+              if (pcB.signalingState !== 'closed') {
+                queueMicrotask(() => {
+                  throw error;
+                });
+              }
+            });
           }
         });
       });

@@ -248,17 +248,17 @@ tape('negotiating MediaStreamTracks and then renegotiating without them', functi
       var offer2 = new RTCSessionDescription({ type: 'offer', sdp: sdp2 });
       return pc.setRemoteDescription(offer2);
     }).then(function() {
-      t.equal(pc.getReceivers().length, 0, 'after calling .setRemoteDescription() again, .getReceivers() returns nothing');
-      t.equal(receivers[0].track.readyState, 'ended', 'but the previous audio RTCRtpReceiver\'s .track has .readyState "ended"');
-      t.equal(receivers[1].track.readyState, 'ended', 'but the previous video RTCRtpReceiver\'s .track has .readyState "ended"');
+      t.equal(pc.getReceivers().length, 2, 'renegotiation keeps the Unified Plan RTCRtpReceivers');
+      t.equal(receivers[0].track.readyState, 'live', 'the audio RTCRtpReceiver\'s .track remains live');
+      t.equal(receivers[1].track.readyState, 'live', 'the video RTCRtpReceiver\'s .track remains live');
       return pc.createAnswer();
     }).then(function(answer2) {
       return pc.setLocalDescription(answer2);
     }).then(function() {
-      t.equal(pc.getReceivers().length, 0, 'after calling .close(), .getReceivers() returns nothing');
       pc.close();
-      t.equal(receivers[0].track.readyState, 'ended', 'but the previous audio RTCRtpReceiver\'s .track has .readyState "ended"');
-      t.equal(receivers[1].track.readyState, 'ended', 'but the previous video RTCRtpReceiver\'s .track has .readyState "ended"');
+      t.equal(pc.getReceivers().length, 0, 'closing removes the stopped Unified Plan RTCRtpReceivers');
+      t.equal(receivers[0].track.readyState, 'ended', 'the audio RTCRtpReceiver\'s .track is ended');
+      t.equal(receivers[1].track.readyState, 'ended', 'the video RTCRtpReceiver\'s .track is ended');
       t.end();
     });
   });
