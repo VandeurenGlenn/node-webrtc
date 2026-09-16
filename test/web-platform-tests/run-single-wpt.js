@@ -1,10 +1,11 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs');
 const { URL } = require('url');
 const { it } = require('mocha');
 const { inBrowserContext } = require('./util.js');
-const { JSDOM, ResourceLoader, VirtualConsole } = require('jsdom');
+const { JSDOM, VirtualConsole, requestInterceptor } = require('jsdom');
 const wrtc = require('../..');
 
 const reporterPathname = '/resources/testharnessreport.js';
@@ -25,29 +26,26 @@ module.exports = urlPrefixFactory => {
   };
 };
 
-class CustomResourceLoader extends ResourceLoader {
-  constructor() {
-    super({ strictSSL: false });
+const resourceInterceptor = requestInterceptor(async request => {
+  const url = new URL(request.url);
+
+  if (url.pathname === reporterPathname) {
+    return new Response('window.shimTest();', {
+      headers: { 'Content-Type': 'application/javascript' }
+    });
+  } else if (url.pathname.startsWith('/resources/')) {
+    // When running to-upstream tests, the server doesn't have a /resources/ directory.
+    // So, always go to the one in ./tests.
+    // The path replacement accounts for a rewrite performed by the WPT server:
+    // https://github.com/w3c/web-platform-tests/blob/master/tools/serve/serve.py#L271
+    const filePath = path.resolve(__dirname, 'tests' + url.pathname)
+      .replace('/resources/WebIDLParser.js', '/resources/webidl2/lib/webidl2.js');
+    const body = await fs.promises.readFile(filePath);
+    return new Response(body);
   }
-  fetch(urlString, options) {
-    const url = new URL(urlString);
 
-    if (url.pathname === reporterPathname) {
-      return Promise.resolve(Buffer.from('window.shimTest();', 'utf-8'));
-    } else if (url.pathname.startsWith('/resources/')) {
-      // When running to-upstream tests, the server doesn't have a /resources/ directory.
-      // So, always go to the one in ./tests.
-      // The path replacement accounts for a rewrite performed by the WPT server:
-      // https://github.com/w3c/web-platform-tests/blob/master/tools/serve/serve.py#L271
-      const filePath = path.resolve(__dirname, 'tests' + url.pathname)
-        .replace('/resources/WebIDLParser.js', '/resources/webidl2/lib/webidl2.js');
-
-      return super.fetch(`file://${filePath}`, options);
-    }
-
-    return super.fetch(urlString, options);
-  }
-}
+  return undefined;
+});
 
 function createJSDOM(urlPrefix, testPath, expectFail) {
   const unhandledExceptions = [];
@@ -72,7 +70,7 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
   return JSDOM.fromURL(urlPrefix + testPath, {
     runScripts: 'dangerously',
     virtualConsole,
-    resources: new CustomResourceLoader(),
+    resources: { interceptors: [resourceInterceptor] },
     pretendToBeVisual: true,
     storageQuota: 100000 // Filling the default quota takes about a minute between two WPTs
   })
