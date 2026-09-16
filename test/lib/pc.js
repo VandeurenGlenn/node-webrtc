@@ -2,6 +2,18 @@
 
 const { RTCPeerConnection } = require('../..');
 
+function relayIceCandidate(peerConnection, candidate) {
+  if (!candidate || peerConnection.signalingState === 'closed') {
+    return Promise.resolve();
+  }
+  return peerConnection.addIceCandidate(candidate).catch(error => {
+    if (peerConnection.signalingState !== 'closed'
+      && !/RTCPeerConnection is closed/.test(error.message)) {
+      throw error;
+    }
+  });
+}
+
 function createRTCPeerConnections(configuration1 = {}, configuration2 = {}, options = {}) {
   options = {
     handleIce: true,
@@ -13,15 +25,7 @@ function createRTCPeerConnections(configuration1 = {}, configuration2 = {}, opti
     if (options.handleIce) {
       [[pc1, pc2], [pc2, pc1]].forEach(([pcA, pcB]) => {
         pcA.addEventListener('icecandidate', ({ candidate }) => {
-          if (candidate && pcB.signalingState !== 'closed') {
-            pcB.addIceCandidate(candidate).catch(error => {
-              if (pcB.signalingState !== 'closed') {
-                queueMicrotask(() => {
-                  throw error;
-                });
-              }
-            });
-          }
+          relayIceCandidate(pcB, candidate);
         });
       });
     }
@@ -149,5 +153,6 @@ module.exports = {
   doOffer,
   negotiate,
   negotiateRTCPeerConnections,
+  relayIceCandidate,
   waitForStateChange
 };

@@ -4,6 +4,7 @@ var test = require('tape');
 var wrtc = require('..');
 
 var RTCPeerConnection = wrtc.RTCPeerConnection;
+var relayIceCandidate = require('./lib/pc').relayIceCandidate;
 
 test('make sure channel is available after after connection is closed on the other side', function(t) {
   t.plan(3);
@@ -13,9 +14,7 @@ test('make sure channel is available after after connection is closed on the oth
 
   [[peer1, peer2], [peer2, peer1]].forEach(function(peers) {
     peers[0].onicecandidate = function(event) {
-      if (event.candidate) {
-        peers[1].addIceCandidate(event.candidate);
-      }
+      relayIceCandidate(peers[1], event.candidate);
     };
   });
 
