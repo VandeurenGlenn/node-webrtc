@@ -41,8 +41,7 @@ static std::vector<rtc::Buffer> copy_certs(webrtc::DtlsTransportInformation info
     auto ders = std::vector<rtc::Buffer>();
     ders.reserve(size);
     for (unsigned long i = 0; i < size; i++) {
-      // TODO(mroberts): I don't know a more approriate value to initialize with.
-      auto buffer = rtc::Buffer(1);
+      auto buffer = rtc::Buffer::CreateUninitializedWithSize(1);
       certs->Get(i).ToDER(&buffer);
       ders.emplace_back(std::move(buffer));
     }

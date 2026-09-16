@@ -317,6 +317,13 @@ target_compile_definitions(${MODULE} PRIVATE
   -DUSE_BUILTIN_SW_CODECS
 )
 
+# Keep the addon on supported WebRTC and platform APIs as upstream evolves.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  target_compile_options(${MODULE} PRIVATE -Werror=deprecated-declarations)
+elseif(MSVC)
+  target_compile_options(${MODULE} PRIVATE /we4996)
+endif()
+
 if(WIN32)
   # Apply the static CRT consistently to both the C delay-load hook and the
   # C++ addon sources. Setting /MT only in CXX flags leaves the hook on /MD,

@@ -10,7 +10,6 @@ import RTCIceCandidate from "./icecandidate.js";
 import RTCPeerConnection from "./peerconnection.js";
 import RTCPeerConnectionIceEvent from "./rtcpeerconnectioniceevent.js";
 import RTCSessionDescription from "./sessiondescription.js";
-import DOMException from "domexception";
 
 const {
   MediaStream,
@@ -41,7 +40,7 @@ inherits(RTCIceTransport, EventTarget);
 inherits(RTCSctpTransport, EventTarget);
 inherits(RTCVideoSink, EventTarget);
 
-setDOMException(DOMException);
+setDOMException(globalThis.DOMException);
 
 // NOTE(mroberts): Here's a hack to support jsdom's Blob implementation.
 RTCDataChannel.prototype.send = function send(data) {
