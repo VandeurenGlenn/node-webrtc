@@ -24,6 +24,13 @@ async function runLegacyTest(fn, nativeContext) {
     else resolveCompletion();
   }
 
+  // node:test aborts the test context when its timeout expires. Propagate
+  // that cancellation to the compatibility promise; otherwise the promise
+  // remains pending and native WebRTC handles keep the process alive.
+  nativeContext.signal.addEventListener('abort', () => {
+    settle(nativeContext.signal.reason || new Error('Test aborted'));
+  }, { once: true });
+
   function record(assertion) {
     if (settled) return;
     try {

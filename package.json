@@ -81,7 +81,7 @@
     "install-example": "node scripts/install-example.js",
     "lint": "eslint benchmarks scripts test eslint.config.js rollup.config.js",
     "node-pre-gyp-package": "node scripts/clean-package-build.js && node-pre-gyp package",
-    "test": "node --expose-gc test/all.js",
+    "test": "node --expose-gc --test --test-force-exit test/all.js",
     "test:electron": "electron test/electron",
     "wpt:init": "git submodule update --init --recursive",
     "wpt:reset": "node scripts/reset-wpt.js && npm run wpt:init",
