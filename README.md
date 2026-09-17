@@ -34,7 +34,7 @@ You can also [build from source](docs/build-from-source.md).
 Supported Platforms
 -------------------
 
-Release `v0.7.0` provides N-API v3 binaries for Linux x64/arm64, macOS
+Release `v0.7.0` provides N-API v3 binaries for Linux x64, macOS
 x64/arm64, and Windows x64. N-API keeps those binaries ABI-compatible across
 supported Node.js versions. Other platform and architecture combinations can
 use the [source build](docs/build-from-source.md).

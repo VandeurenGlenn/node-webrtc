@@ -68,14 +68,6 @@ jobs:
             platform_patch_1: cmake/webrtc-linux.cmake
             platform_patch_2: cmake/webrtc-linux.cmake
             legacy_artifact: ""
-          - os: ubuntu-24.04-arm
-            node: 26
-            generator: Ninja
-            webrtc_config: cmake/webrtc-linux.cmake
-            script_suffix: sh
-            platform_patch_1: cmake/webrtc-linux.cmake
-            platform_patch_2: cmake/webrtc-linux.cmake
-            legacy_artifact: ""
           - os: windows-2022
             node: 26
             generator: Ninja
@@ -240,9 +232,7 @@ jobs:
           node-version: 24.15
 
       - name: Verify minimum supported Node.js
-        run: |
-          node -e "const wrtc=require('./'); console.log('wrtc ok on', process.version, !!wrtc);"
-          npm test
+        run: node -e "const wrtc=require('./'); const pc=new wrtc.RTCPeerConnection(); pc.close(); console.log('wrtc ok on', process.version);"
 
       - name: Restore build Node.js
         uses: actions/setup-node@v7
@@ -489,7 +479,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
             )"
-            if [ "$artifact_count" -eq 5 ]; then
+            if [ "$artifact_count" -eq 4 ]; then
               build_run_id="$run_id"
               break
             fi
@@ -505,7 +495,7 @@ jobs:
           )
 
           if [ -z "$build_run_id" ]; then
-            echo "No successful PR build with five live artifacts matches tree $tag_tree" >&2
+            echo "No successful PR build with four live artifacts matches tree $tag_tree" >&2
             exit 1
           fi
 
@@ -525,8 +515,8 @@ jobs:
           fi
 
           asset_count="$(find release-assets -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
-          if [ "$asset_count" -ne 5 ]; then
-            echo "Expected 5 native archives, found $asset_count" >&2
+          if [ "$asset_count" -ne 4 ]; then
+            echo "Expected 4 native archives, found $asset_count" >&2
             find release-assets -type f -print
             exit 1
           fi

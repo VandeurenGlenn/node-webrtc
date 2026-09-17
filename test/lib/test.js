@@ -90,9 +90,14 @@ async function runLegacyTest(fn, nativeContext) {
 
   try {
     const result = fn(context);
-    if (result && typeof result.then === 'function') await result;
+    const returnsPromise = result && typeof result.then === 'function';
+    if (returnsPromise) await result;
     if (subtests.length) await Promise.all(subtests);
-    if (!settled) {
+    // Tape-style callback tests return synchronously and finish later through
+    // t.plan() or t.end(). Do not finish those tests when their callback
+    // returns: node:test would close the parent while native callbacks are
+    // still pending. Promise and subtest-based tests can be completed here.
+    if (!settled && (returnsPromise || subtests.length)) {
       if (plannedAssertions !== null && assertionCount !== plannedAssertions) {
         settle(new Error(`plan != count (${plannedAssertions} != ${assertionCount})`));
       } else settle();

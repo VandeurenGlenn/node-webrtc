@@ -269,6 +269,17 @@ endif()
 # automatically, while the single-config Ninja generator otherwise writes it
 # directly to the build root.
 if(WIN32)
+  # libwebrtc is built with Chromium's static CRT configuration. Express the
+  # same requirement through CMake's runtime abstraction so clang-cl applies
+  # it consistently to both C and C++ sources with Ninja.
+  set_property(TARGET ${MODULE} PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+  )
+  target_compile_options(${MODULE} PRIVATE
+    /GR-
+    $<$<CONFIG:Debug>:-D_HAS_ITERATOR_DEBUGGING=0>
+  )
+
   set_target_properties(${MODULE} PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Release"
@@ -338,13 +349,6 @@ elseif(MSVC)
 endif()
 
 if(WIN32)
-  # Apply the static CRT consistently to both the C delay-load hook and the
-  # C++ addon sources. Setting /MT only in CXX flags leaves the hook on /MD,
-  # which makes lld-link look for the dynamic UCRT import symbols.
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
-  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT /GR-")
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd /GR- -D_HAS_ITERATOR_DEBUGGING=0")
   target_link_libraries(${MODULE} PRIVATE
     dmoguids.lib
     iphlpapi.lib
