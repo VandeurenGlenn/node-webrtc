@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "child_process";
-import { cp, mkdtemp, readFile, rm, writeFile } from "fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { createRequire } from "module";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -35,6 +35,8 @@ const jsonFields = [
   "license",
   "repository",
   "main",
+  "types",
+  "exports",
   "browser",
   "binary",
   "engines",
@@ -81,9 +83,22 @@ async function main() {
 
   await writeFile(join(packageDirectory, "README.md"), readme);
 
-  const publishArgs = ["publish", "--access", "public"];
+  const packIndex = process.argv.indexOf("--pack");
+  const packDestination = packIndex === -1 ? null : process.argv[packIndex + 1];
+  if (packIndex !== -1 && !packDestination) {
+    throw new Error("--pack requires a destination directory");
+  }
+  const publishArgs = packDestination
+    ? ["pack", "--pack-destination", packDestination]
+    : ["publish", "--access", "public"];
   if (process.argv.includes("--dry-run")) {
     publishArgs.push("--dry-run");
+  }
+  if (!packDestination && process.argv.includes("--provenance")) {
+    publishArgs.push("--provenance");
+  }
+  if (packDestination) {
+    await mkdir(packDestination, { recursive: true });
   }
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const { status } = spawnSync(npmCommand, publishArgs, {
@@ -92,7 +107,7 @@ async function main() {
   });
   await rm(packageDirectory, { recursive: true, force: true });
   if (status) {
-    throw new Error("npm publish failed");
+    throw new Error(packDestination ? "npm pack failed" : "npm publish failed");
   }
 }
 

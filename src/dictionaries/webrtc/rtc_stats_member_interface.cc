@@ -20,6 +20,14 @@ static Validation<Napi::Value> ConvertAttributeValue(Napi::Env env, const T& val
   return From<Napi::Value>(std::make_pair(env, value));
 }
 
+// WebRTC stats expose unsigned long long counters as JavaScript Numbers.
+// Large counters may lose integer precision, matching WebIDL/browser behavior,
+// but must not reject the complete RTCStatsReport.
+static Validation<Napi::Value> ConvertAttributeValue(Napi::Env env, const uint64_t& value) {
+  Napi::EscapableHandleScope scope(env);
+  return Pure(scope.Escape(Napi::Number::New(env, static_cast<double>(value)).As<Napi::Value>()));
+}
+
 template <typename T>
 static Validation<Napi::Value> ConvertAttributeValue(Napi::Env env, const std::map<std::string, T>& value) {
   Napi::EscapableHandleScope scope(env);

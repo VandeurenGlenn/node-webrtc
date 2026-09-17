@@ -36,7 +36,7 @@ class AsyncObjectWrap: public Napi::ObjectWrap<T> {
     AsyncContextReleaser::GetDefault();
   }
 
-  virtual ~AsyncObjectWrap() {
+  ~AsyncObjectWrap() override {
     DestroyAsyncContext();
   }
 

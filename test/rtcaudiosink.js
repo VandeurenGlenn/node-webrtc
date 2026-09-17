@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const { getUserMedia } = require('..');
 const { RTCAudioSink } = require('..').nonstandard;

@@ -44,7 +44,7 @@ class ErrorFactory {
   static Napi::Value SetDOMException(const Napi::CallbackInfo&);
   static const char* DOMExceptionNameToString(DOMExceptionName);
   static Napi::Value CreateDOMException(Napi::Env, std::string, DOMExceptionName);
-  static Napi::FunctionReference& _DOMException();
+  static Napi::FunctionReference& DOMExceptionConstructor();
 };
 
 }  // namespace node_webrtc

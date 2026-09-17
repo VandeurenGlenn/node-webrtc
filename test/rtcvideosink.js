@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const { RTCVideoSink, RTCVideoSource } = require('..').nonstandard;
 const { I420Frame } = require('./lib/frame');
@@ -16,7 +16,11 @@ test('RTCVideoSink', t => {
   return outputFramePromise.then(outputFrame => {
     t.equal(inputFrame.width, outputFrame.width);
     t.equal(inputFrame.height, outputFrame.height);
-    t.deepEqual(inputFrame.data, outputFrame.data);
+    t.deepEqual(
+      Array.from(inputFrame.data),
+      Array.from(outputFrame.data),
+      'frame bytes are preserved'
+    );
     sink.stop();
     t.ok(sink.stopped, 'RTCVideoSink initially is finally stopped');
     track.stop();

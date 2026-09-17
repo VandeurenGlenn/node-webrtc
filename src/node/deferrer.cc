@@ -21,7 +21,7 @@ Deferrer::~Deferrer() {
 }
 
 void Deferrer::Queue() {
-  if (_work_mutex.try_lock()) {
+  if (!_queued.exchange(true)) {
     Napi::HandleScope scope(_env);
     napi_queue_async_work(_env, _work);
   }
@@ -33,7 +33,7 @@ void Deferrer::DoNothing(napi_env, void*) {
 
 void Deferrer::CallExecute(napi_env, napi_status, void* data) {
   auto self = static_cast<Deferrer*>(data);
-  self->_work_mutex.unlock();
+  self->_queued = false;
   self->Execute(self->_env);
 }
 

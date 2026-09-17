@@ -1,6 +1,6 @@
 'use strict';
 
-var test = require('tape');
+var test = require('./lib/test');
 
 var wrtc = require('..');
 

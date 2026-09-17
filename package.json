@@ -7,7 +7,7 @@
     "peer"
   ],
   "type": "module",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": "Alan K <ack@modeswitch.org> (http://blog.modeswitch.org)",
   "homepage": "https://github.com/VandeurenGlenn/node-webrtc",
   "bugs": "https://github.com/VandeurenGlenn/node-webrtc/issues",
@@ -17,6 +17,14 @@
     "url": "git+https://github.com/VandeurenGlenn/node-webrtc.git"
   },
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "browser": "./lib/browser.js",
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
   "browser": "lib/browser.js",
   "binary": {
     "module_name": "wrtc",
@@ -53,7 +61,6 @@
     "rollup": "^4.34.6",
     "server-destroy": "^1.0.1",
     "simple-peer": "^9.11.1",
-    "tape": "4.17.0",
     "tslib": "^2.8.1",
     "typescript": "^5.8.2"
   },
@@ -74,7 +81,7 @@
     "install-example": "node scripts/install-example.js",
     "lint": "eslint benchmarks scripts test eslint.config.js rollup.config.js",
     "node-pre-gyp-package": "node scripts/clean-package-build.js && node-pre-gyp package",
-    "test": "node --expose-gc test/all.js",
+    "test": "node --expose-gc --test --test-force-exit test/all.js",
     "test:electron": "electron test/electron",
     "wpt:init": "git submodule update --init --recursive",
     "wpt:reset": "node scripts/reset-wpt.js && npm run wpt:init",

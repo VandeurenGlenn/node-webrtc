@@ -1,6 +1,6 @@
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 const { Certificate } = require('@fidm/x509');
 
 const {

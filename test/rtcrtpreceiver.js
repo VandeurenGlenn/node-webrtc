@@ -1,6 +1,6 @@
 'use strict';
 
-var tape = require('tape');
+var tape = require('./lib/test');
 var wrtc = require('..');
 
 var MediaStream = wrtc.MediaStream;

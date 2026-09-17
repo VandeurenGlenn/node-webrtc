@@ -7,8 +7,8 @@
 
 node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M152, branch-heads/7977](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7977). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
 
-Modern source builds are continuously tested with Node.js 26 on Linux, macOS,
-and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
+Modern source builds are continuously tested with Node.js 24 and 26 on Linux,
+macOS, and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
 `clang-cl` on Windows, and its pinned toolchain on macOS. The addon and WebRTC
 share each platform's standard C++ library ABI.
 
@@ -34,10 +34,20 @@ You can also [build from source](docs/build-from-source.md).
 Supported Platforms
 -------------------
 
-Release `v0.5.5` provides N-API v3 binaries for Linux x64, macOS arm64, and
-Windows x64. N-API keeps those binaries ABI-compatible across supported Node.js
-versions, including the Node 26 jobs used by CI. Other platform and architecture
-combinations can use the [source build](docs/build-from-source.md).
+Release `v0.7.0` provides N-API v3 binaries for Linux x64, macOS
+x64/arm64, and Windows x64. N-API keeps those binaries ABI-compatible across
+supported Node.js versions. Other platform and architecture combinations can
+use the [source build](docs/build-from-source.md).
+
+Migration to v0.7
+-----------------
+
+The callback-based legacy `RTCPeerConnection#getStats(success, failure)` API
+has been removed. Use the standards-based Promise API instead:
+
+```js
+const stats = await peerConnection.getStats();
+```
 
 Examples
 --------

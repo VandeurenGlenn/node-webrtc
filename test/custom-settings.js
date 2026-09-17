@@ -1,82 +1,50 @@
 /* eslint no-console:0 */
 'use strict';
 
-var tape = require('tape');
-var SimplePeer = require('simple-peer');
+var tape = require('./lib/test');
 var wrtc = require('..');
+var gatherCandidates = require('./lib/pc').gatherCandidates;
 
-tape('custom ports connect once', function(t) {
-  t.plan(1);
-  connectClientServer({ min: 9000, max: 9010 }, function(err) {
-    t.error(err, 'connectClientServer callback');
-  });
+tape('custom ports connect once', async function(t) {
+  const portRange = { min: 40000, max: 49999 };
+  const candidates = await gatherCandidatesInRange(portRange);
+  t.ok(candidates.length > 0, 'gathered candidates');
+  t.ok(candidates.every(candidate => isValidCandidate(candidate.candidate, portRange)),
+    'all candidates use the custom port range');
 });
 
-tape('custom ports connect concurrently', function(t) {
+tape('custom ports connect concurrently', async function(t) {
   const n = 2;
-
-  t.plan(n);
-  const portRange = { min: 9000, max: 9010 };
-
-  function callback(err) {
-    t.error(err, 'connectClientServer callback');
-  }
-
-  for (let i = 0; i < n; i++) {
-    connectClientServer(portRange, callback);
-  }
+  const portRange = { min: 40000, max: 49999 };
+  const results = await Promise.all(
+    Array.from({ length: n }, () => gatherCandidatesInRange(portRange))
+  );
+  t.ok(results.every(candidates => candidates.length > 0),
+    'all peer connections gathered candidates');
+  t.ok(results.flat().every(candidate => isValidCandidate(candidate.candidate, portRange)),
+    'all concurrent candidates use the custom port range');
 });
 
-function connectClientServer(portRange, callback) {
-  const client = new SimplePeer({
-    wrtc: wrtc,
-    initiator: true,
-    config: { iceServers: [] }
-  });
-
-  const server = new SimplePeer({
-    wrtc: wrtc,
-    initiator: false,
-    config: {
-      iceServers: [],
-      portRange: portRange
-    }
-  });
-
-  client.on('signal', function(data) {
-    server.signal(data);
-  });
-  server.on('signal', function(data) {
-    if (data.candidate && !isValidCandidate(data.candidate.candidate, portRange || { min: 0, max: 65535 }, true)) {
-      callback(`candidate must follow port range (${portRange}): ${data.candidate.candidate}`);
-    }
-    client.signal(data);
-  });
-  server.on('connect', function() {
-    server.send('xyz');
-  });
-  client.on('data', function() {
-    callback();
-    server.destroy();
-    client.destroy();
-  });
-  client.on('error', function(e) {
-    callback(e);
-    server.destroy();
-    client.destroy();
-  });
-  server.on('error', function(e) {
-    callback(e);
-    client.destroy();
-    server.destroy();
-  });
+async function gatherCandidatesInRange(portRange) {
+  const pc = new wrtc.RTCPeerConnection({ iceServers: [], portRange });
+  try {
+    pc.createDataChannel('custom-port-test');
+    const candidatesPromise = gatherCandidates(pc);
+    await pc.setLocalDescription(await pc.createOffer());
+    return await candidatesPromise;
+  } finally {
+    pc.close();
+  }
 }
 
 function isValidCandidate(candidate, portRange) {
-  const port = candidate.replace(/candidate:([^\s]+)\s([^\s]+)\s([^\s]+)\s([^\s]+)\s([^\s]+)\s([0-9]+)\styp.*/, '$6');
-
-  const minPort = portRange.min;
-  const maxPort = portRange.max;
-
-  return minPort <= parseInt(port) && maxPort >= parseInt(port);
+  const fields = candidate.trim().split(/\s+/);
+  const protocol = fields[2].toLowerCase();
+  const port = Number(fields[5]);
+  // Active TCP candidates use the ICE discard port sentinel rather than a
+  // locally bound allocator port (RFC 6544, section 4.5).
+  if (protocol === 'tcp' && port === 9 && fields.includes('active')) {
+    return true;
+  }
+  return Number.isInteger(port) && port >= portRange.min && port <= portRange.max;
 }

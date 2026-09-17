@@ -50,11 +50,15 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   _workerThread = rtc::Thread::CreateWithSocketServer();
   assert(_workerThread);
 
-  bool result = _workerThread->SetName("PeerConnectionFactory:workerThread", nullptr);
-  assert(result);
+  if (!_workerThread->SetName("PeerConnectionFactory:workerThread", nullptr)) {
+    Napi::Error::New(env, "Failed to name the WebRTC worker thread").ThrowAsJavaScriptException();
+    return;
+  }
 
-  result = _workerThread->Start();
-  assert(result);
+  if (!_workerThread->Start()) {
+    Napi::Error::New(env, "Failed to start the WebRTC worker thread").ThrowAsJavaScriptException();
+    return;
+  }
 
   _audioDeviceModule = _workerThread->BlockingCall([] {
     return webrtc::CreateAudioDeviceModule(
@@ -65,11 +69,15 @@ PeerConnectionFactory::PeerConnectionFactory(const Napi::CallbackInfo& info)
   _signalingThread = rtc::Thread::Create();
   assert(_signalingThread);
 
-  result = _signalingThread->SetName("PeerConnectionFactory:signalingThread", nullptr);
-  assert(result);
+  if (!_signalingThread->SetName("PeerConnectionFactory:signalingThread", nullptr)) {
+    Napi::Error::New(env, "Failed to name the WebRTC signaling thread").ThrowAsJavaScriptException();
+    return;
+  }
 
-  result = _signalingThread->Start();
-  assert(result);
+  if (!_signalingThread->Start()) {
+    Napi::Error::New(env, "Failed to start the WebRTC signaling thread").ThrowAsJavaScriptException();
+    return;
+  }
 
   _factory = webrtc::CreatePeerConnectionFactory(
           _workerThread.get(),

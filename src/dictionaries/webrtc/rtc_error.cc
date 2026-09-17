@@ -45,6 +45,8 @@ TO_NAPI_IMPL(const webrtc::RTCError*, pair) {
     // NOTE(mroberts): I believe this is supposed to include some additional data.
     case webrtc::RTCErrorType::OPERATION_ERROR_WITH_DATA:
       return Pure(scope.Escape(ErrorFactory::CreateOperationError(env, error->message())));
+    default:
+      return Pure(scope.Escape(ErrorFactory::CreateError(env, error->message())));
   }
 }
 

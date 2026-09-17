@@ -38,18 +38,17 @@ class RTCAudioTrackSource : public webrtc::LocalAudioSource {
   }
 
   void PushData(RTCOnDataEventDict dict) {
+    std::unique_ptr<uint8_t[]> samples(dict.samples);
     webrtc::AudioTrackSinkInterface* sink = _sink;
     if (sink && dict.numberOfFrames.IsJust()) {
       sink->OnData(
-          dict.samples,
+          samples.get(),
           dict.bitsPerSample,
           dict.sampleRate,
           dict.channelCount,
           dict.numberOfFrames.UnsafeFromJust()
       );
     }
-    // HACK(mroberts): I'd rather we use a smart pointer.
-    delete[] dict.samples;
   }
 
   void AddSink(webrtc::AudioTrackSinkInterface* sink) override {

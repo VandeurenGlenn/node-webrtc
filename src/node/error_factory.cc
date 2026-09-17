@@ -13,7 +13,7 @@
 #include "src/converters/napi.h"  // IWYU pragma: keep
 #include "src/functional/validation.h"
 
-Napi::FunctionReference& node_webrtc::ErrorFactory::_DOMException() {
+Napi::FunctionReference& node_webrtc::ErrorFactory::DOMExceptionConstructor() {
   static Napi::FunctionReference func;
   return func;
 }
@@ -57,10 +57,10 @@ Napi::Value node_webrtc::ErrorFactory::CreateRangeError(const Napi::Env env, con
   return scope.Escape(Napi::RangeError::New(env, message).Value());
 }
 
-// FIXME(mroberts): Actually implement this.
 Napi::Value node_webrtc::ErrorFactory::CreateSyntaxError(const Napi::Env env, const std::string message) {
   Napi::EscapableHandleScope scope(env);
-  return scope.Escape(Napi::Error::New(env, message).Value());
+  auto constructor = env.Global().Get("SyntaxError").As<Napi::Function>();
+  return scope.Escape(constructor.New({Napi::String::New(env, message)}));
 }
 
 const char* node_webrtc::ErrorFactory::DOMExceptionNameToString(DOMExceptionName name) {
@@ -75,14 +75,16 @@ const char* node_webrtc::ErrorFactory::DOMExceptionNameToString(DOMExceptionName
       return "NetworkError";
     case kOperationError:
       return "OperationError";
+    default:
+      return "Error";
   }
 }
 
 Napi::Value node_webrtc::ErrorFactory::CreateDOMException(Napi::Env env, const std::string message, const DOMExceptionName name) {
   Napi::EscapableHandleScope scope(env);
   auto prefix = DOMExceptionNameToString(name);
-  if (!_DOMException().IsEmpty()) {
-    return scope.Escape(_DOMException().New({
+  if (!DOMExceptionConstructor().IsEmpty()) {
+    return scope.Escape(DOMExceptionConstructor().New({
       Napi::String::New(env, message),
       Napi::String::New(env, prefix)
     }));
@@ -96,7 +98,7 @@ Napi::Value node_webrtc::ErrorFactory::SetDOMException(const Napi::CallbackInfo&
     Napi::TypeError::New(info.Env(), maybeDOMException.ToErrors()[0]).ThrowAsJavaScriptException();
     return info.Env().Undefined();
   }
-  _DOMException() = Napi::Persistent(maybeDOMException.UnsafeFromValid());
-  _DOMException().SuppressDestruct();
+  DOMExceptionConstructor() = Napi::Persistent(maybeDOMException.UnsafeFromValid());
+  DOMExceptionConstructor().SuppressDestruct();
   return info.Env().Undefined();
 }

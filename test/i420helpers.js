@@ -1,6 +1,6 @@
 "use strict";
 
-const tape = require("tape");
+const tape = require("./lib/test");
 
 const { i420ToRgba, rgbaToI420 } = require("..").nonstandard;
 

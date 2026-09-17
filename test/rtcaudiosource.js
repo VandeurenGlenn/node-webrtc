@@ -1,7 +1,7 @@
 /* eslint no-undefined:0 */
 'use strict';
 
-const test = require('tape');
+const test = require('./lib/test');
 
 const { RTCAudioSink, RTCAudioSource } = require('..').nonstandard;
 

@@ -1,3 +1,26 @@
+0.7.0
+=====
+
+New Features
+------------
+
+- Updated the package interface with explicit ESM exports and TypeScript types.
+- Added Node.js 24 compatibility checks, Web Platform Tests, native sanitizers,
+  release checksums, an SBOM, and npm provenance to CI.
+- Replaced Tape with the built-in Node.js test runner and bounded every native
+  test with an explicit timeout.
+
+Breaking Changes
+----------------
+
+- Removed the callback-based legacy `RTCPeerConnection#getStats` API. Use the
+  standards-based Promise API instead.
+
+Bug Fixes
+---------
+
+- Corrected array ownership and deallocation in the native audio sample path.
+
 0.4.6
 =====
 

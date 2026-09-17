@@ -16,7 +16,7 @@ class Wrap {
  public:
   Wrap() = delete;
 
-  explicit Wrap(T(*Create)(V..., U)): _Create(Create) {}
+  explicit Wrap(T(*create)(V..., U)): _create(create) {}
 
   Wrap(Wrap const&) = delete;
 
@@ -24,7 +24,7 @@ class Wrap {
 
   T GetOrCreate(V... args, U key) {
     return _map.computeIfAbsent(key, [this, key, args...]() {
-      return _Create(args..., key);
+      return _create(args..., key);
     });
   }
 
@@ -37,7 +37,7 @@ class Wrap {
   }
 
  private:
-  T(*_Create)(V..., U);
+  T(*_create)(V..., U);
   BidiMap<U, T> _map;
 };
 

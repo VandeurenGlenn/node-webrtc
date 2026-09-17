@@ -98,8 +98,6 @@ void RTCAudioSink::OnData(
     auto maybeValue = From<Napi::Value>(std::make_pair(env, dict));
     if (maybeValue.IsInvalid()) {
       // TODO(mroberts): Should raise an error; although this really shouldn't happen.
-      // HACK(mroberts): I'd rather we use a smart pointer.
-      delete[] dict.samples;
       return;
     }
     auto object = maybeValue.UnsafeFromValid().ToObject();

@@ -331,10 +331,6 @@ RTCPeerConnection.prototype.getTransceivers = function getTransceivers() {
 };
 
 RTCPeerConnection.prototype.getStats = function getStats() {
-  if (typeof arguments[0] === "function") {
-    this._pc.legacyGetStats().then(arguments[0], arguments[1]);
-    return;
-  }
   return this._pc.getStats();
 };
 

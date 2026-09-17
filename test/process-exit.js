@@ -2,7 +2,7 @@
 
 var path = require('path');
 var spawnSync = require('child_process').spawnSync;
-var test = require('tape');
+var test = require('./lib/test');
 
 test('closed WebRTC objects exit without a native teardown abort', function(t) {
   var script = [
