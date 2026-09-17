@@ -48,6 +48,11 @@ async function runLegacyTest(fn, nativeContext) {
     }
   }
 
+  function assertWithOptionalMessage(assertion, actual, expected, message) {
+    if (message === undefined) assertion(actual, expected);
+    else assertion(actual, expected, message);
+  }
+
   const context = {
     test(name, childFn) {
       subtests.push(nativeContext.test(
@@ -67,13 +72,13 @@ async function runLegacyTest(fn, nativeContext) {
       } else settle();
     },
     equal(actual, expected, message) {
-      record(() => assert.equal(actual, expected, message));
+      record(() => assertWithOptionalMessage(assert.equal, actual, expected, message));
     },
     notEqual(actual, expected, message) {
-      record(() => assert.notEqual(actual, expected, message));
+      record(() => assertWithOptionalMessage(assert.notEqual, actual, expected, message));
     },
     deepEqual(actual, expected, message) {
-      record(() => assert.deepEqual(actual, expected, message));
+      record(() => assertWithOptionalMessage(assert.deepEqual, actual, expected, message));
     },
     ok(value, message) {
       record(() => assert.ok(value, message));
