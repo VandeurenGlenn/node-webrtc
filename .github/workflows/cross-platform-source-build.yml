@@ -55,7 +55,7 @@ jobs:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ matrix.timeout_minutes || 60 }}
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +86,7 @@ jobs:
             legacy_artifact: libwebrtc-macOS-ARM64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-macos26
           - os: macos-15-intel
             node: 26
+            timeout_minutes: 120
             generator: Ninja
             webrtc_config: cmake/webrtc-macos.cmake
             script_suffix: sh
