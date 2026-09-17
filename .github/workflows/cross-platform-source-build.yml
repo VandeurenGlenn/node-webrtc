@@ -395,8 +395,30 @@ jobs:
           pattern: benchmark-*
           path: benchmark-artifacts
 
+      - name: Download benchmark history
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p benchmark-history
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow cross-platform-source-build.yml \
+            --branch develop \
+            --event push \
+            --status success \
+            --limit 20 \
+            --json databaseId \
+            --jq '.[].databaseId' |
+          while read -r run_id; do
+            gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern 'benchmark-*' \
+              --dir "benchmark-history/$run_id" || true
+          done
+
       - name: Render benchmark report
-        run: node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report
+        run: node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
 
       - name: Add report to workflow summary
         run: cat benchmark-report/summary.md >> "$GITHUB_STEP_SUMMARY"
