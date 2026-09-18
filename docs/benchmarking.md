@@ -73,6 +73,11 @@ It also runs the shared DataChannel scenarios on Linux against Koush's legacy
 load on the current Node.js release are shown as unsupported instead of making
 the primary build fail.
 
+Koush `wrtc@0.4.7` is run separately on Node.js 14.21.3, its final supported
+Node.js release line. The dashboard labels its runtime explicitly; that result
+is a legacy reference and is not treated as a runtime-equivalent comparison
+with the implementations benchmarked on Node.js 26.
+
 The implementation comparison ranks median duration and shows each result's
 distance from the fastest implementation. Read the scenarios together:
 creating and immediately closing a peer can favor implementations that defer
