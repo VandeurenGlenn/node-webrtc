@@ -85,6 +85,11 @@ ICE, DTLS, SCTP, or native initialization until negotiation. Small differences
 on shared GitHub runners should be confirmed over multiple runs before they
 are treated as optimization targets.
 
+The overall winner uses the geometric mean of normalized scenario ratios. Each
+scenario therefore has equal weight regardless of its millisecond scale. Only
+implementations measured on the same Node.js version as this project are
+eligible; legacy-runtime results remain visible but do not affect the title.
+
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
 
