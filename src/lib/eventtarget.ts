@@ -35,7 +35,8 @@ EventTarget.prototype.dispatchEvent = function dispatchEvent(event) {
     return;
   }
 
-  process.nextTick(() => {
+  const pendingEvents = (this._pendingEvents = this._pendingEvents || []);
+  pendingEvents.push(() => {
     for (const listener of eventListeners || []) {
       if (
         typeof listener === "object" &&
@@ -49,6 +50,19 @@ EventTarget.prototype.dispatchEvent = function dispatchEvent(event) {
 
     if (typeof dummyListener === "function") {
       dummyListener.call(this, event);
+    }
+  });
+
+  if (this._eventDispatchScheduled) {
+    return;
+  }
+  this._eventDispatchScheduled = true;
+  process.nextTick(() => {
+    const queuedEvents = this._pendingEvents;
+    this._pendingEvents = [];
+    this._eventDispatchScheduled = false;
+    for (const dispatch of queuedEvents) {
+      dispatch();
     }
   });
 };

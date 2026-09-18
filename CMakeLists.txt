@@ -13,6 +13,7 @@ if(DEFINED ENV{WRTC_ENABLE_SANITIZERS} AND "$ENV{WRTC_ENABLE_SANITIZERS}" STREQU
   set(WRTC_ENABLE_SANITIZERS_DEFAULT ON)
 endif()
 option(WRTC_ENABLE_SANITIZERS "Build the addon with address and undefined behavior sanitizers" ${WRTC_ENABLE_SANITIZERS_DEFAULT})
+option(WRTC_ENABLE_LTO "Enable interprocedural optimization for release addon builds" OFF)
 
 set(WEBRTC_PREBUILT_DEFAULT OFF)
 if(DEFINED ENV{WEBRTC_PREBUILT} AND "$ENV{WEBRTC_PREBUILT}" STREQUAL "1")
@@ -255,6 +256,15 @@ list(FILTER MODULE_SRC EXCLUDE REGEX ".*/rtc_peer_connection/stats_observer\\.(c
 list(FILTER MODULE_SRC EXCLUDE REGEX ".*/webrtc/test_audio_device_module\\.(cc|h)$")
 add_nodejs_module(${MODULE} ${MODULE_SRC})
 set_property(TARGET ${MODULE} PROPERTY CXX_STANDARD 20)
+
+if(WRTC_ENABLE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT wrtc_ipo_supported OUTPUT wrtc_ipo_error)
+  if(NOT wrtc_ipo_supported)
+    message(FATAL_ERROR "WRTC_ENABLE_LTO is unsupported: ${wrtc_ipo_error}")
+  endif()
+  set_property(TARGET ${MODULE} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
 
 if(WRTC_ENABLE_SANITIZERS)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

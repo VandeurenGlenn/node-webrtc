@@ -90,6 +90,20 @@ scenario therefore has equal weight regardless of its millisecond scale. Only
 implementations measured on the same Node.js version as this project are
 eligible; legacy-runtime results remain visible but do not affect the title.
 
+The suite measures both latency and sustained delivery. Latency scenarios are
+reported in milliseconds (lower is better). Text throughput is messages per
+second and binary throughput is MiB per second (higher is better). Throughput
+uses an already-open, ordered DataChannel so setup time does not distort steady
+state delivery. `pc_create_close_ms` covers the lightweight lifecycle, while
+`pc_negotiate_datachannel_open_ms` covers the full connection path through an
+open SCTP DataChannel.
+
+For native profiling, use `npm run bench:profile:linux` with `perf` or
+`npm run bench:profile:macos` with Instruments' Time Profiler. Release addon
+builds can opt into link-time optimization with
+`cmake -DWRTC_ENABLE_LTO=ON`; it remains opt-in because compiler and linker
+support must match on every release platform.
+
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
 
