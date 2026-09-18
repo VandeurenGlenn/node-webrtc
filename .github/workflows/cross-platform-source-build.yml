@@ -245,9 +245,35 @@ jobs:
         run: npm run wpt:init
 
       - name: Run Web Platform Tests
+        id: wpt
         if: runner.os == 'Linux'
         continue-on-error: true
         run: npm run wpt:test
+
+      - name: Generate WPT badge status
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        env:
+          WPT_OUTCOME: ${{ steps.wpt.outcome }}
+        run: |
+          mkdir -p wpt-status
+          if [ "$WPT_OUTCOME" = "success" ]; then
+            message=passing
+            color=brightgreen
+          else
+            message=failing
+            color=red
+          fi
+          node -e 'const fs=require("fs"); fs.writeFileSync("wpt-status/wpt-badge.json", JSON.stringify({schemaVersion:1,label:"WPT",message:process.argv[1],color:process.argv[2]}) + "\n")' "$message" "$color"
+
+      - name: Preserve WPT badge status
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wpt-status
+          path: wpt-status/wpt-badge.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
@@ -480,6 +506,12 @@ jobs:
           pattern: benchmark-*
           path: benchmark-artifacts
 
+      - name: Download WPT badge status
+        uses: actions/download-artifact@v7
+        with:
+          name: wpt-status
+          path: wpt-status
+
       - name: Download benchmark history
         shell: bash
         env:
@@ -503,7 +535,9 @@ jobs:
           done
 
       - name: Render benchmark report
-        run: node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+        run: |
+          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+          cp wpt-status/wpt-badge.json benchmark-report/wpt-badge.json
 
       - name: Add report to workflow summary
         run: cat benchmark-report/summary.md >> "$GITHUB_STEP_SUMMARY"
