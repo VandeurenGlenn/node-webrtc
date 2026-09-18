@@ -245,9 +245,35 @@ jobs:
         run: npm run wpt:init
 
       - name: Run Web Platform Tests
+        id: wpt
         if: runner.os == 'Linux'
         continue-on-error: true
         run: npm run wpt:test
+
+      - name: Generate WPT badge status
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        env:
+          WPT_OUTCOME: ${{ steps.wpt.outcome }}
+        run: |
+          mkdir -p wpt-status
+          if [ "$WPT_OUTCOME" = "success" ]; then
+            message=passing
+            color=brightgreen
+          else
+            message=failing
+            color=red
+          fi
+          node -e 'const fs=require("fs"); fs.writeFileSync("wpt-status/wpt-badge.json", JSON.stringify({schemaVersion:1,label:"WPT",message:process.argv[1],color:process.argv[2]}) + "\n")' "$message" "$color"
+
+      - name: Preserve WPT badge status
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wpt-status
+          path: wpt-status/wpt-badge.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Benchmark smoke
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
@@ -380,10 +406,95 @@ jobs:
           export LD_PRELOAD="$(cc -print-file-name=libasan.so)"
           npm test
 
+  implementation-benchmarks:
+    name: Compare Node WebRTC implementations
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    needs: source-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Download tested Linux addon
+        uses: actions/download-artifact@v7
+        with:
+          name: wrtc-Linux-X64
+          path: comparison-addon
+
+      - name: Prepare project implementation
+        shell: bash
+        run: |
+          mkdir -p build
+          addon_archive="$(find comparison-addon -type f -name '*.tar.gz' -print -quit)"
+          tar -xzf "$addon_archive" -C build
+          npm install --ignore-scripts
+
+      - name: Benchmark project implementation
+        run: |
+          node benchmarks/run.js \
+            --suite implementation-comparison \
+            --implementation @vandeurenglenn/wrtc \
+            --iterations 5 \
+            --warmup 1 \
+            --compare-runs 3 \
+            --messages 10 \
+            --output benchmarks/implementations/vandeurenglenn-wrtc.json
+
+      - name: Benchmark alternative implementations
+        shell: bash
+        run: |
+          benchmark_implementation() {
+            label="$1"
+            package_spec="$2"
+            package_name="$3"
+            output_name="$4"
+            install_dir="$RUNNER_TEMP/webrtc-implementations/$output_name"
+            output="benchmarks/implementations/$output_name.json"
+            mkdir -p "$install_dir"
+            if npm install --prefix "$install_dir" --no-package-lock "$package_spec"; then
+              module_path="$(node -e 'console.log(require.resolve(process.argv[1], { paths: [process.argv[2]] }))' "$package_name" "$install_dir")"
+              if node benchmarks/run.js \
+                --suite implementation-comparison \
+                --implementation "$label" \
+                --module "$module_path" \
+                --iterations 5 \
+                --warmup 1 \
+                --compare-runs 3 \
+                --messages 10 \
+                --output "$output"; then
+                return
+              fi
+              reason="installed but benchmark API is incompatible"
+            else
+              reason="package is unavailable on Node ${NODE_VERSION:-26}"
+            fi
+            node benchmarks/unsupported-result.js "$label" "$output" "$reason"
+          }
+
+          benchmark_implementation 'Koush wrtc 0.4.7' 'wrtc@0.4.7' 'wrtc' 'koush-wrtc'
+          benchmark_implementation '@roamhq/wrtc 0.10.0' '@roamhq/wrtc@0.10.0' '@roamhq/wrtc' 'roamhq-wrtc'
+          benchmark_implementation 'werift 0.24.4' 'werift@0.24.4' 'werift' 'werift'
+
+      - name: Preserve implementation results
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-implementations
+          path: benchmarks/implementations/*.json
+          if-no-files-found: error
+          retention-days: 90
+
   benchmark-report:
     name: Visual benchmark report
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    needs: source-build
+    needs:
+      - source-build
+      - implementation-benchmarks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -394,6 +505,12 @@ jobs:
         with:
           pattern: benchmark-*
           path: benchmark-artifacts
+
+      - name: Download WPT badge status
+        uses: actions/download-artifact@v7
+        with:
+          name: wpt-status
+          path: wpt-status
 
       - name: Download benchmark history
         shell: bash
@@ -418,7 +535,9 @@ jobs:
           done
 
       - name: Render benchmark report
-        run: node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+        run: |
+          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+          cp wpt-status/wpt-badge.json benchmark-report/wpt-badge.json
 
       - name: Add report to workflow summary
         run: cat benchmark-report/summary.md >> "$GITHUB_STEP_SUMMARY"

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { execSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 let wrtc = null;
 
@@ -111,6 +112,9 @@ function parseArgs(argv) {
     baseline: "",
     regressionThreshold: 5,
     failOnRegression: false,
+    implementation: "@vandeurenglenn/wrtc",
+    module: "",
+    suite: "platform",
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -167,6 +171,24 @@ function parseArgs(argv) {
 
     if (arg === "--fail-on-regression") {
       options.failOnRegression = true;
+      continue;
+    }
+
+    if (arg === "--implementation" && next) {
+      options.implementation = next;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--module" && next) {
+      options.module = next;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--suite" && next) {
+      options.suite = next;
+      i += 1;
     }
   }
 
@@ -586,8 +608,13 @@ function ensureParentDir(filePath) {
 }
 
 async function run() {
+  const options = parseArgs(process.argv.slice(2));
   try {
-    wrtc = await import("../lib/index.js");
+    const moduleSpecifier = options.module
+      ? pathToFileURL(path.resolve(options.module)).href
+      : "../lib/index.js";
+    const imported = await import(moduleSpecifier);
+    wrtc = imported.RTCPeerConnection ? imported : imported.default;
   } catch (error) {
     if (error && error.code === "MODULE_NOT_FOUND") {
       console.error(
@@ -599,8 +626,6 @@ async function run() {
     }
     throw error;
   }
-
-  const options = parseArgs(process.argv.slice(2));
 
   if (!Number.isFinite(options.iterations) || options.iterations <= 0) {
     throw new Error("--iterations must be > 0");
@@ -694,6 +719,8 @@ async function run() {
       compareRuns: options.compareRuns,
       messagesPerIteration: options.messages,
       binaryPayloadBytes: options.binaryPayloadBytes,
+      implementation: options.implementation,
+      suite: options.suite,
     },
     scenarios: scenarioResults,
     comparison: computeComparison(
