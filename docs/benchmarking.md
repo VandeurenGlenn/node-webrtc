@@ -73,6 +73,13 @@ It also runs the shared DataChannel scenarios on Linux against Koush's legacy
 load on the current Node.js release are shown as unsupported instead of making
 the primary build fail.
 
+The implementation comparison ranks median duration and shows each result's
+distance from the fastest implementation. Read the scenarios together:
+creating and immediately closing a peer can favor implementations that defer
+ICE, DTLS, SCTP, or native initialization until negotiation. Small differences
+on shared GitHub runners should be confirmed over multiple runs before they
+are treated as optimization targets.
+
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
 
