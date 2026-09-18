@@ -68,6 +68,10 @@ Successful `develop` builds also publish the report at
 [vandeurenglenn.github.io/node-webrtc](https://vandeurenglenn.github.io/node-webrtc/).
 The dashboard includes a per-scenario timeline built from up to 20 successful
 `develop` workflow runs. Hover a point to see its commit and mean duration.
+It also runs the shared DataChannel scenarios on Linux against Koush's legacy
+`wrtc`, `@roamhq/wrtc`, and `werift`. Implementations that cannot install or
+load on the current Node.js release are shown as unsupported instead of making
+the primary build fail.
 
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.

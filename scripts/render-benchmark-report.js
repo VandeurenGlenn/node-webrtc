@@ -48,9 +48,11 @@ function deltaDisplay(comparison) {
   };
 }
 
-const results = findJsonFiles(inputDirectory)
+const currentResults = findJsonFiles(inputDirectory)
   .map((file) => JSON.parse(fs.readFileSync(file, "utf8")))
   .sort((a, b) => `${a.meta.platform}-${a.meta.arch}`.localeCompare(`${b.meta.platform}-${b.meta.arch}`));
+const results = currentResults.filter((result) => result.meta.suite !== "implementation-comparison");
+const implementationResults = currentResults.filter((result) => result.meta.suite === "implementation-comparison");
 
 if (results.length === 0) {
   throw new Error(`No benchmark JSON files found under ${inputDirectory}`);
@@ -58,6 +60,7 @@ if (results.length === 0) {
 
 const history = [...findJsonFiles(historyDirectory), ...findJsonFiles(inputDirectory)]
   .map((file) => JSON.parse(fs.readFileSync(file, "utf8")))
+  .filter((result) => result.meta.suite !== "implementation-comparison")
   .filter((result, index, all) => all.findIndex((candidate) =>
     candidate.meta.platform === result.meta.platform
     && candidate.meta.arch === result.meta.arch
@@ -134,12 +137,31 @@ const cards = results.map((result) => {
   return `<article class="card"><h2>${escapeHtml(result.meta.platform)} / ${escapeHtml(result.meta.arch)}</h2><p>Node ${escapeHtml(result.meta.node)} · commit ${escapeHtml(result.meta.commit)}</p>${rows}</article>`;
 }).join("\n");
 
+const supportedImplementations = implementationResults.filter((result) => result.status !== "unsupported");
+const implementationScenarioNames = [...new Set(supportedImplementations.flatMap((result) => Object.keys(result.scenarios)))];
+const implementationCharts = implementationScenarioNames.map((name) => {
+  const entries = supportedImplementations
+    .filter((result) => typeof result.scenarios[name]?.mean === "number")
+    .map((result) => ({
+      label: result.meta.implementation,
+      value: result.scenarios[name].mean,
+    }));
+  const maximum = Math.max(...entries.map((entry) => entry.value), 0.001);
+  const rows = entries.map((entry) => `<div class="implementation-row"><span>${escapeHtml(entry.label)}</span><div class="track"><i class="implementation" style="width:${Math.max(2, (entry.value / maximum) * 100)}%"></i></div><strong>${entry.value.toFixed(3)} ms</strong></div>`).join("");
+  return `<section class="implementation-scenario"><h3>${escapeHtml(labelScenario(name))}</h3>${rows}</section>`;
+}).join("\n");
+const unsupportedImplementations = implementationResults
+  .filter((result) => result.status === "unsupported")
+  .map((result) => `<li><strong>${escapeHtml(result.meta.implementation)}</strong>: ${escapeHtml(result.reason)}</li>`)
+  .join("");
+const implementationSection = implementationResults.length === 0 ? "" : `<section class="comparison"><h2>Node WebRTC implementation comparison</h2><p>Identical DataChannel scenarios on one Linux x64 runner. Lower is better.</p>${implementationCharts}${unsupportedImplementations ? `<h3>Unsupported</h3><ul>${unsupportedImplementations}</ul>` : ""}</section>`;
+
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>node-webrtc benchmarks</title>
 <style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#0d1117;color:#e6edf3}body{max-width:1200px;margin:auto;padding:40px 20px}h1{margin-bottom:4px}.intro{color:#8b949e;margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}.card>p{color:#8b949e}.scenario{border-top:1px solid #30363d;padding:14px 0}.scenario h3{font-size:14px}.bar-row{display:grid;grid-template-columns:65px 1fr 82px;gap:8px;align-items:center;font-size:12px;margin:7px 0}.track{height:10px;background:#21262d;border-radius:5px;overflow:hidden}.track i{display:block;height:100%;border-radius:5px}.current{background:#58a6ff}.baseline{background:#8b949e}.bar-row strong{text-align:right}.delta{margin:6px 0 0;font-weight:700}.improvement{color:#3fb950}.regression{color:#f85149}.pending,.history-pending{color:#8b949e}.timeline{display:block;width:100%;height:auto;margin-top:12px;background:#0d1117;border-radius:6px}.timeline polyline{fill:none;stroke:#58a6ff;stroke-width:2}.timeline circle{fill:#58a6ff;stroke:#0d1117;stroke-width:2}.timeline-labels{display:flex;justify-content:space-between;color:#8b949e;font-size:10px;margin-top:3px}footer{color:#8b949e;margin-top:24px}
-</style></head><body><h1>node-webrtc benchmarks</h1><p class="intro">Lower is better. Current commit compared with the latest successful develop build on identical runner architecture.</p><main class="grid">${cards}</main><footer>Generated ${escapeHtml(new Date().toISOString())}</footer></body></html>`;
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#0d1117;color:#e6edf3}body{max-width:1200px;margin:auto;padding:40px 20px}h1{margin-bottom:4px}.intro{color:#8b949e;margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px}.card,.comparison{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:20px}.card>p,.comparison>p{color:#8b949e}.scenario,.implementation-scenario{border-top:1px solid #30363d;padding:14px 0}.scenario h3,.implementation-scenario h3{font-size:14px}.bar-row{display:grid;grid-template-columns:65px 1fr 82px;gap:8px;align-items:center;font-size:12px;margin:7px 0}.track{height:10px;background:#21262d;border-radius:5px;overflow:hidden}.track i{display:block;height:100%;border-radius:5px}.current{background:#58a6ff}.baseline{background:#8b949e}.implementation{background:#a371f7}.bar-row strong{text-align:right}.delta{margin:6px 0 0;font-weight:700}.improvement{color:#3fb950}.regression{color:#f85149}.pending,.history-pending{color:#8b949e}.timeline{display:block;width:100%;height:auto;margin-top:12px;background:#0d1117;border-radius:6px}.timeline polyline{fill:none;stroke:#58a6ff;stroke-width:2}.timeline circle{fill:#58a6ff;stroke:#0d1117;stroke-width:2}.timeline-labels{display:flex;justify-content:space-between;color:#8b949e;font-size:10px;margin-top:3px}.comparison{margin-top:24px}.implementation-row{display:grid;grid-template-columns:minmax(150px,220px) 1fr 82px;gap:10px;align-items:center;font-size:12px;margin:9px 0}.implementation-row strong{text-align:right}footer{color:#8b949e;margin-top:24px}
+</style></head><body><h1>node-webrtc benchmarks</h1><p class="intro">Lower is better. Current commit compared with the latest successful develop build on identical runner architecture.</p><main class="grid">${cards}</main>${implementationSection}<footer>Generated ${escapeHtml(new Date().toISOString())}</footer></body></html>`;
 
 fs.mkdirSync(outputDirectory, { recursive: true });
 fs.writeFileSync(path.join(outputDirectory, "summary.md"), `${markdown.join("\n")}\n`);
