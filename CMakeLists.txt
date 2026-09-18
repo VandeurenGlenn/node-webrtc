@@ -384,7 +384,6 @@ elseif(APPLE)
     -Wpedantic
     -Wno-missing-prototypes
     -Wno-covered-switch-default
-    -Wno-nrvo
     -Wno-poison-system-directories
   )
 

@@ -66,6 +66,8 @@ requests after they land on `develop`.
 
 Successful `develop` builds also publish the report at
 [vandeurenglenn.github.io/node-webrtc](https://vandeurenglenn.github.io/node-webrtc/).
+The dashboard includes a per-scenario timeline built from up to 20 successful
+`develop` workflow runs. Hover a point to see its commit and mean duration.
 
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
