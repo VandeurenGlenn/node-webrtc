@@ -406,6 +406,72 @@ jobs:
           export LD_PRELOAD="$(cc -print-file-name=libasan.so)"
           npm test
 
+  linux-performance-profile:
+    name: Linux DataChannel performance profile
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    needs: source-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Download tested Linux addon
+        uses: actions/download-artifact@v7
+        with:
+          name: wrtc-Linux-X64
+          path: profile-addon
+
+      - name: Prepare project implementation
+        shell: bash
+        run: |
+          mkdir -p build
+          addon_archive="$(find profile-addon -type f -name '*.tar.gz' -print -quit)"
+          tar -xzf "$addon_archive" -C build
+          npm install --ignore-scripts
+
+      - name: Install Linux profiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-tools-common linux-tools-generic
+
+      - name: Capture binary DataChannel profile
+        shell: bash
+        run: |
+          mkdir -p performance-profile
+          sudo sysctl -w kernel.perf_event_paranoid=-1 || true
+          sudo sysctl -w kernel.kptr_restrict=0 || true
+          sudo --preserve-env=PATH perf record \
+            --freq 999 \
+            --call-graph dwarf \
+            --output performance-profile/perf.data \
+            -- node benchmarks/run.js \
+              --scenario datachannel_binary_throughput_mib_per_second \
+              --iterations 5 \
+              --warmup 1 \
+              --throughput-messages 5000 \
+              --output performance-profile/benchmark.json
+          sudo perf report \
+            --stdio \
+            --no-children \
+            --input performance-profile/perf.data \
+            > performance-profile/perf-report.txt
+          sudo chown -R "$(id -u):$(id -g)" performance-profile
+
+      - name: Preserve Linux performance profile
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-datachannel-performance-profile
+          path: performance-profile
+          if-no-files-found: warn
+          retention-days: 30
+
   implementation-benchmarks:
     name: Compare Node WebRTC implementations
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

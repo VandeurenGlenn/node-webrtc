@@ -106,6 +106,11 @@ builds can opt into link-time optimization with
 `cmake -DWRTC_ENABLE_LTO=ON`; it remains opt-in because compiler and linker
 support must match on every release platform.
 
+Pass `--scenario <name>` one or more times to restrict a local run or profiler
+capture to specific scenarios. CI stores the Linux binary-throughput
+`perf.data`, a text report, and the corresponding benchmark JSON as
+downloadable artifacts.
+
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
 

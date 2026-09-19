@@ -116,6 +116,7 @@ function parseArgs(argv) {
     implementation: "@vandeurenglenn/wrtc",
     module: "",
     suite: "platform",
+    scenarios: [],
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -195,6 +196,12 @@ function parseArgs(argv) {
 
     if (arg === "--suite" && next) {
       options.suite = next;
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--scenario" && next) {
+      options.scenarios.push(next);
       i += 1;
     }
   }
@@ -757,7 +764,7 @@ async function run() {
 
   const textThroughput = createDataChannelThroughputScenario(options, false);
   const binaryThroughput = createDataChannelThroughputScenario(options, true);
-  const scenarios = [
+  const allScenarios = [
     {
       name: "pc_create_close_ms",
       run: benchmarkPeerConnectionCreateClose,
@@ -795,6 +802,14 @@ async function run() {
       lowerIsBetter: false,
     },
   ];
+  const scenarios = options.scenarios.length === 0
+    ? allScenarios
+    : allScenarios.filter((scenario) => options.scenarios.includes(scenario.name));
+  const unknownScenarios = options.scenarios.filter((name) =>
+    !allScenarios.some((scenario) => scenario.name === name));
+  if (unknownScenarios.length > 0) {
+    throw new Error(`Unknown scenario: ${unknownScenarios.join(", ")}`);
+  }
 
   const allRunResults = [];
   for (let runIndex = 0; runIndex < options.compareRuns; runIndex += 1) {
