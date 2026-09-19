@@ -94,7 +94,9 @@ The suite measures both latency and sustained delivery. Latency scenarios are
 reported in milliseconds (lower is better). Text throughput is messages per
 second and binary throughput is MiB per second (higher is better). Throughput
 uses an already-open, ordered DataChannel so setup time does not distort steady
-state delivery. `pc_create_close_ms` covers the lightweight lifecycle, while
+state delivery. All warmups and samples in one comparison pass reuse that
+connection; teardown happens after the pass and outside the measured interval.
+`pc_create_close_ms` covers the lightweight lifecycle, while
 `pc_negotiate_datachannel_open_ms` covers the full connection path through an
 open SCTP DataChannel.
 

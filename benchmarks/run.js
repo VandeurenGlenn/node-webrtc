@@ -513,76 +513,91 @@ async function benchmarkDataChannelBinaryRtt(options) {
   }
 }
 
-async function benchmarkDataChannelThroughput(options, binary) {
+function createDataChannelThroughputScenario(options, binary) {
   let localDataChannel = null;
-  let remoteDataChannelPromise = null;
   let remoteDataChannel = null;
-  const peers = await negotiateRTCPeerConnections({
-    withPc1(pc1) {
-      localDataChannel = pc1.createDataChannel(
-        binary ? "bench-throughput-binary" : "bench-throughput-text",
-      );
-    },
-    withPc2(pc2) {
-      remoteDataChannelPromise = new Promise((resolve) => {
-        pc2.addEventListener("datachannel", (event) => resolve(event.channel));
+  let pc1 = null;
+  let pc2 = null;
+  const count = options.throughputMessages;
+  const payload = binary
+    ? new Uint8Array(options.binaryPayloadBytes)
+    : "x".repeat(options.binaryPayloadBytes);
+
+  return {
+    async setup() {
+      let remoteDataChannelPromise = null;
+      [pc1, pc2] = await negotiateRTCPeerConnections({
+        withPc1(peerConnection) {
+          localDataChannel = peerConnection.createDataChannel(
+            binary ? "bench-throughput-binary" : "bench-throughput-text",
+          );
+        },
+        withPc2(peerConnection) {
+          remoteDataChannelPromise = new Promise((resolve) => {
+            peerConnection.addEventListener("datachannel", (event) =>
+              resolve(event.channel));
+          });
+        },
       });
+      remoteDataChannel = await remoteDataChannelPromise;
+      await Promise.all([
+        waitForChannelOpen(localDataChannel),
+        waitForChannelOpen(remoteDataChannel),
+      ]);
     },
-  });
-  const [pc1, pc2] = peers;
+    async run() {
+      let received = 0;
+      let resolveReceived;
+      let rejectReceived;
+      const allReceived = new Promise((resolve, reject) => {
+        resolveReceived = resolve;
+        rejectReceived = reject;
+      });
+      const timeout = setTimeout(() => {
+        rejectReceived(
+          new Error(
+            `Throughput benchmark received ${received}/${count} messages`,
+          ),
+        );
+      }, 30000);
+      const onMessage = () => {
+        received += 1;
+        if (received === count) resolveReceived();
+      };
+      remoteDataChannel.addEventListener("message", onMessage);
 
-  try {
-    remoteDataChannel = await remoteDataChannelPromise;
-    await Promise.all([
-      waitForChannelOpen(localDataChannel),
-      waitForChannelOpen(remoteDataChannel),
-    ]);
-
-    const count = options.throughputMessages;
-    const payload = binary
-      ? new Uint8Array(options.binaryPayloadBytes)
-      : "x".repeat(options.binaryPayloadBytes);
-    let received = 0;
-    let resolveReceived;
-    let rejectReceived;
-    const allReceived = new Promise((resolve, reject) => {
-      resolveReceived = resolve;
-      rejectReceived = reject;
-    });
-    const timeout = setTimeout(() => {
-      rejectReceived(
-        new Error(`Throughput benchmark received ${received}/${count} messages`),
-      );
-    }, 30000);
-    const onMessage = () => {
-      received += 1;
-      if (received === count) resolveReceived();
-    };
-    remoteDataChannel.addEventListener("message", onMessage);
-
-    const started = performance.now();
-    for (let index = 0; index < count; index += 1) {
-      localDataChannel.send(payload);
-    }
-    await allReceived.finally(() => {
-      clearTimeout(timeout);
-      remoteDataChannel.removeEventListener("message", onMessage);
-    });
-    const seconds = (performance.now() - started) / 1000;
-    if (binary) {
-      return (count * options.binaryPayloadBytes) / (1024 * 1024) / seconds;
-    }
-    return count / seconds;
-  } finally {
-    if (localDataChannel && localDataChannel.readyState !== "closed") {
-      localDataChannel.close();
-    }
-    if (remoteDataChannel && remoteDataChannel.readyState !== "closed") {
-      remoteDataChannel.close();
-    }
-    pc1.close();
-    pc2.close();
-  }
+      const started = performance.now();
+      for (let index = 0; index < count; index += 1) {
+        localDataChannel.send(payload);
+      }
+      await allReceived.finally(() => {
+        clearTimeout(timeout);
+        remoteDataChannel.removeEventListener("message", onMessage);
+      });
+      const seconds = (performance.now() - started) / 1000;
+      if (binary) {
+        return (count * options.binaryPayloadBytes) / (1024 * 1024) / seconds;
+      }
+      return count / seconds;
+    },
+    async teardown() {
+      if (localDataChannel && localDataChannel.readyState !== "closed") {
+        localDataChannel.close();
+      }
+      if (remoteDataChannel && remoteDataChannel.readyState !== "closed") {
+        remoteDataChannel.close();
+      }
+      if (pc1) pc1.close();
+      if (pc2) pc2.close();
+      localDataChannel = null;
+      remoteDataChannel = null;
+      pc1 = null;
+      pc2 = null;
+      // Let libwebrtc deliver close notifications before another scenario
+      // creates peer connections. This is outside the measured interval.
+      await new Promise((resolve) => setImmediate(resolve));
+    },
+  };
 }
 
 function formatValue(value, unit = "ms") {
@@ -740,6 +755,8 @@ async function run() {
     throw new Error("--binary-payload-bytes must be > 0");
   }
 
+  const textThroughput = createDataChannelThroughputScenario(options, false);
+  const binaryThroughput = createDataChannelThroughputScenario(options, true);
   const scenarios = [
     {
       name: "pc_create_close_ms",
@@ -767,13 +784,13 @@ async function run() {
     },
     {
       name: "datachannel_text_throughput_messages_per_second",
-      run: () => benchmarkDataChannelThroughput(options, false),
+      ...textThroughput,
       unit: "messages/s",
       lowerIsBetter: false,
     },
     {
       name: "datachannel_binary_throughput_mib_per_second",
-      run: () => benchmarkDataChannelThroughput(options, true),
+      ...binaryThroughput,
       unit: "MiB/s",
       lowerIsBetter: false,
     },
@@ -789,21 +806,26 @@ async function run() {
         `Running ${scenario.name} (pass ${runIndex + 1}/${options.compareRuns})`,
       );
 
-      for (let warmup = 0; warmup < options.warmup; warmup += 1) {
-        await scenario.run();
-      }
+      if (scenario.setup) await scenario.setup();
+      try {
+        for (let warmup = 0; warmup < options.warmup; warmup += 1) {
+          await scenario.run();
+        }
 
-      const samples = [];
-      for (let i = 0; i < options.iterations; i += 1) {
-        const sample = await scenario.run();
-        samples.push(sample);
-      }
+        const samples = [];
+        for (let i = 0; i < options.iterations; i += 1) {
+          const sample = await scenario.run();
+          samples.push(sample);
+        }
 
-      scenarioResults[scenario.name] = {
-        ...summarize(samples),
-        unit: scenario.unit,
-        lowerIsBetter: scenario.lowerIsBetter,
-      };
+        scenarioResults[scenario.name] = {
+          ...summarize(samples),
+          unit: scenario.unit,
+          lowerIsBetter: scenario.lowerIsBetter,
+        };
+      } finally {
+        if (scenario.teardown) await scenario.teardown();
+      }
     }
 
     allRunResults.push(scenarioResults);
