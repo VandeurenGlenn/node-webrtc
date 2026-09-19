@@ -215,18 +215,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ARTIFACT_BASE: native-addon-${{ runner.os }}-${{ runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
+          PRODUCER_JOB: ${{ matrix.os }} / node ${{ matrix.node }}
         run: |
           artifact_name="$ARTIFACT_BASE-${ImageOS:-unknown}"
-          run_id="$(
+          run_id=""
+          while IFS= read -r candidate_run_id; do
+            producer_status="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id/jobs?filter=latest&per_page=100" \
+                --jq ".jobs[] | select(.name == \"$PRODUCER_JOB\") | .conclusion" |
+              head -n 1
+            )"
+            if [ "$producer_status" = "success" ]; then
+              run_id="$candidate_run_id"
+              break
+            fi
+          done < <(
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100" \
-              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
-          )"
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[].workflow_run.id'
+          )
           echo "name=$artifact_name" >> "$GITHUB_OUTPUT"
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
           if [ -n "$run_id" ]; then
             echo "Reusing content-addressed addon uploaded after platform tests in run $run_id"
           else
-            echo "No successful matching native addon; this job will compile it"
+            echo "No matching addon from a successful $PRODUCER_JOB job; this job will compile it"
           fi
 
       - name: Download tested native addon
@@ -343,6 +355,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BENCHMARK_ARTIFACT: benchmark-${{ runner.os }}-${{ runner.arch }}
+          PRODUCER_JOB: ${{ matrix.os }} / node ${{ matrix.node }}
         run: |
           mkdir -p benchmarks/ci-baseline
           develop_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/develop" --jq '.commit.sha')"
@@ -355,6 +368,14 @@ jobs:
                 --jq '.tree.sha' 2>/dev/null || true
             )"
             if [ "$candidate_tree" != "$develop_tree" ]; then
+              continue
+            fi
+            producer_status="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
+                --jq ".jobs[] | select(.name == \"$PRODUCER_JOB\") | .conclusion" |
+              head -n 1
+            )"
+            if [ "$producer_status" != "success" ]; then
               continue
             fi
             if gh run download "$run_id" \
@@ -373,7 +394,6 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --workflow cross-platform-source-build.yml \
               --event pull_request \
-              --status success \
               --limit 100 \
               --json databaseId,headSha \
               --jq '.[] | [.databaseId, .headSha] | @tsv'
@@ -702,10 +722,21 @@ jobs:
             --json headRefOid \
             --jq '.[].headRefOid' |
           while read -r head_sha; do
-            run_id="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-platform-source-build.yml/runs?event=pull_request&status=success&head_sha=$head_sha&per_page=10" \
-                --jq '.workflow_runs[0].id // empty'
-            )"
+            run_id=""
+            while IFS= read -r candidate_run_id; do
+              report_status="$(
+                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id/jobs?filter=latest&per_page=100" \
+                  --jq '.jobs[] | select(.name == "Visual benchmark report") | .conclusion' |
+                head -n 1
+              )"
+              if [ "$report_status" = "success" ]; then
+                run_id="$candidate_run_id"
+                break
+              fi
+            done < <(
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-platform-source-build.yml/runs?event=pull_request&head_sha=$head_sha&per_page=10" \
+                --jq '.workflow_runs[].id'
+            )
             if [ -z "$run_id" ]; then
               continue
             fi
@@ -763,6 +794,14 @@ jobs:
             if [ "$candidate_tree" != "$develop_tree" ]; then
               continue
             fi
+            report_status="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
+                --jq '.jobs[] | select(.name == "Visual benchmark report") | .conclusion' |
+              head -n 1
+            )"
+            if [ "$report_status" != "success" ]; then
+              continue
+            fi
             artifact_count="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and .name == "benchmark-dashboard")] | length'
@@ -776,14 +815,13 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --workflow cross-platform-source-build.yml \
               --event pull_request \
-              --status success \
               --limit 100 \
               --json databaseId,headSha \
               --jq '.[] | [.databaseId, .headSha] | @tsv'
           )
 
           if [ -z "$dashboard_run_id" ]; then
-            echo "No successful PR dashboard matches develop tree $develop_tree" >&2
+            echo "No dashboard from a successful benchmark-report job matches develop tree $develop_tree" >&2
             exit 1
           fi
 
@@ -840,6 +878,14 @@ jobs:
               continue
             fi
 
+            successful_build_jobs="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
+                --jq '[.jobs[] | select(.conclusion == "success" and (.name == "ubuntu-latest / node 26" or .name == "windows-2022 / node 26" or .name == "macos-latest / node 26" or .name == "macos-15-intel / node 26")) | .name] | unique | length'
+            )"
+            if [ "$successful_build_jobs" -ne 4 ]; then
+              continue
+            fi
+
             artifact_count="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
@@ -853,14 +899,13 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --workflow cross-platform-source-build.yml \
               --event pull_request \
-              --status success \
               --limit 100 \
               --json databaseId,headSha \
               --jq '.[] | [.databaseId, .headSha] | @tsv'
           )
 
           if [ -z "$build_run_id" ]; then
-            echo "No successful PR build with four live artifacts matches tree $tag_tree" >&2
+            echo "No PR run with four successful platform jobs and live artifacts matches tree $tag_tree" >&2
             exit 1
           fi
 
