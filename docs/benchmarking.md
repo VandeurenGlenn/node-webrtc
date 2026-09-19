@@ -106,8 +106,18 @@ builds can opt into link-time optimization with
 `cmake -DWRTC_ENABLE_LTO=ON`; it remains opt-in because compiler and linker
 support must match on every release platform.
 
-The first `develop` build for a platform establishes its baseline, so an
-earlier pull request can show `baseline pending`.
+Pass `--scenario <name>` one or more times to restrict a local run or profiler
+capture to specific scenarios. CI stores the Linux binary-throughput
+`perf.data`, a text report, and the corresponding benchmark JSON as
+downloadable artifacts. Its bounded workload measures ten batches of 5,000
+binary messages at 499 Hz, yielding enough samples for native hotspot
+attribution without an open-ended profiling job.
+
+Pull requests compare against the latest successful PR whose Git tree matches
+`develop`. Merging does not rerun builds, tests, WPT, sanitizers, or benchmarks:
+the lightweight `develop` workflow publishes the already verified PR dashboard.
+An earlier pull request can show `baseline pending` until such a matching
+successful PR result exists.
 
 ## Notes
 

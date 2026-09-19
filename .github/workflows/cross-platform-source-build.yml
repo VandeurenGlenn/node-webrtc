@@ -25,7 +25,7 @@ concurrency:
 jobs:
   tooling:
     name: Lint and dependency audit
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -53,7 +53,7 @@ jobs:
 
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout_minutes || 60 }}
     strategy:
@@ -192,10 +192,61 @@ jobs:
         if: steps.prebuilt.outputs.run-id != ''
         run: node scripts/prepare-webrtc-prebuilt.js
 
+      - name: Find matching tested native addon
+        id: native-addon
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_BASE: native-addon-${{ runner.os }}-${{ runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
+        run: |
+          artifact_name="$ARTIFACT_BASE-${ImageOS:-unknown}"
+          run_id=""
+          while IFS= read -r candidate_run_id; do
+            conclusion="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id" \
+                --jq '.conclusion // empty'
+            )"
+            if [ "$conclusion" = "success" ]; then
+              run_id="$candidate_run_id"
+              break
+            fi
+          done < <(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[].workflow_run.id'
+          )
+          echo "name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          if [ -n "$run_id" ]; then
+            echo "Reusing tested native addon from successful run $run_id"
+          else
+            echo "No successful matching native addon; this job will compile it"
+          fi
+
+      - name: Download tested native addon
+        if: steps.native-addon.outputs.run-id != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ steps.native-addon.outputs.name }}
+          ARTIFACT_RUN_ID: ${{ steps.native-addon.outputs.run-id }}
+        run: |
+          gh run download "$ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir reused-native-addon
+          mkdir -p build
+          addon_archive="$(find reused-native-addon -type f -name '*.tar.gz' -print -quit)"
+          if [ -z "$addon_archive" ]; then
+            echo "The native addon artifact contains no package archive" >&2
+            exit 1
+          fi
+          tar -xzf "$addon_archive" -C build
+
       - name: Install package dependencies
         run: npm install --ignore-scripts --omit=dev
 
-      - name: Build from source
+      - name: Compile native addon
+        if: steps.native-addon.outputs.run-id == ''
         env:
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
@@ -287,7 +338,18 @@ jobs:
           BENCHMARK_ARTIFACT: benchmark-${{ runner.os }}-${{ runner.arch }}
         run: |
           mkdir -p benchmarks/ci-baseline
-          while IFS= read -r run_id; do
+          develop_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/develop" --jq '.commit.sha')"
+          develop_tree="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/commits/$develop_sha" --jq '.tree.sha'
+          )"
+          while IFS=$'\t' read -r run_id head_sha; do
+            candidate_tree="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
+                --jq '.tree.sha' 2>/dev/null || true
+            )"
+            if [ "$candidate_tree" != "$develop_tree" ]; then
+              continue
+            fi
             if gh run download "$run_id" \
               --repo "$GITHUB_REPOSITORY" \
               --name "$BENCHMARK_ARTIFACT" \
@@ -295,7 +357,7 @@ jobs:
               baseline_file="$(find benchmarks/ci-baseline -type f -name '*.json' | head -n 1)"
               if [ -n "$baseline_file" ]; then
                 echo "path=$baseline_file" >> "$GITHUB_OUTPUT"
-                echo "Using benchmark baseline from develop run $run_id"
+                echo "Using benchmark baseline from merged PR run $run_id"
                 exit 0
               fi
             fi
@@ -303,12 +365,11 @@ jobs:
             gh run list \
               --repo "$GITHUB_REPOSITORY" \
               --workflow cross-platform-source-build.yml \
-              --branch develop \
-              --event push \
+              --event pull_request \
               --status success \
-              --limit 20 \
-              --json databaseId \
-              --jq '.[].databaseId'
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
           )
           echo "No platform baseline found; this run will establish one"
 
@@ -348,9 +409,17 @@ jobs:
           path: build/stage/**/*.tar.gz
           if-no-files-found: error
 
+      - name: Preserve content-addressed native addon
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.native-addon.outputs.name }}
+          path: build/stage/**/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
   native-sanitizers:
     name: Linux native sanitizers
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs: source-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -406,9 +475,75 @@ jobs:
           export LD_PRELOAD="$(cc -print-file-name=libasan.so)"
           npm test
 
+  linux-performance-profile:
+    name: Linux DataChannel performance profile
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
+    needs: source-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Download tested Linux addon
+        uses: actions/download-artifact@v7
+        with:
+          name: wrtc-Linux-X64
+          path: profile-addon
+
+      - name: Prepare project implementation
+        shell: bash
+        run: |
+          mkdir -p build
+          addon_archive="$(find profile-addon -type f -name '*.tar.gz' -print -quit)"
+          tar -xzf "$addon_archive" -C build
+          npm install --ignore-scripts
+
+      - name: Install Linux profiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-tools-common linux-tools-generic
+
+      - name: Capture binary DataChannel profile
+        shell: bash
+        run: |
+          mkdir -p performance-profile
+          sudo sysctl -w kernel.perf_event_paranoid=-1 || true
+          sudo sysctl -w kernel.kptr_restrict=0 || true
+          sudo --preserve-env=PATH perf record \
+            --freq 499 \
+            --call-graph dwarf \
+            --output performance-profile/perf.data \
+            -- node benchmarks/run.js \
+              --scenario datachannel_binary_throughput_mib_per_second \
+              --iterations 10 \
+              --warmup 1 \
+              --throughput-messages 5000 \
+              --output performance-profile/benchmark.json
+          sudo perf report \
+            --stdio \
+            --no-children \
+            --input performance-profile/perf.data \
+            > performance-profile/perf-report.txt
+          sudo chown -R "$(id -u):$(id -g)" performance-profile
+
+      - name: Preserve Linux performance profile
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-datachannel-performance-profile
+          path: performance-profile
+          if-no-files-found: warn
+          retention-days: 30
+
   implementation-benchmarks:
     name: Compare Node WebRTC implementations
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs: source-build
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -525,7 +660,7 @@ jobs:
 
   benchmark-report:
     name: Visual benchmark report
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - source-build
       - implementation-benchmarks
@@ -552,16 +687,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p benchmark-history
-          gh run list \
+          gh pr list \
             --repo "$GITHUB_REPOSITORY" \
-            --workflow cross-platform-source-build.yml \
-            --branch develop \
-            --event push \
-            --status success \
+            --base develop \
+            --state merged \
             --limit 20 \
-            --json databaseId \
-            --jq '.[].databaseId' |
-          while read -r run_id; do
+            --json headRefOid \
+            --jq '.[].headRefOid' |
+          while read -r head_sha; do
+            run_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-platform-source-build.yml/runs?event=pull_request&status=success&head_sha=$head_sha&per_page=10" \
+                --jq '.workflow_runs[0].id // empty'
+            )"
+            if [ -z "$run_id" ]; then
+              continue
+            fi
             gh run download "$run_id" \
               --repo "$GITHUB_REPOSITORY" \
               --pattern 'benchmark-*' \
@@ -587,7 +727,6 @@ jobs:
   deploy-benchmark-pages:
     name: Publish benchmark dashboard
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
-    needs: benchmark-report
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -598,11 +737,54 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download visual dashboard
-        uses: actions/download-artifact@v7
-        with:
-          name: benchmark-dashboard
-          path: benchmark-report
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download exact-tree PR dashboard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          develop_tree="$(git rev-parse 'HEAD^{tree}')"
+          dashboard_run_id=""
+
+          while IFS=$'\t' read -r run_id head_sha; do
+            candidate_tree="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
+                --jq '.tree.sha' 2>/dev/null || true
+            )"
+            if [ "$candidate_tree" != "$develop_tree" ]; then
+              continue
+            fi
+            artifact_count="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+                --jq '[.artifacts[] | select(.expired == false and .name == "benchmark-dashboard")] | length'
+            )"
+            if [ "$artifact_count" -eq 1 ]; then
+              dashboard_run_id="$run_id"
+              break
+            fi
+          done < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow cross-platform-source-build.yml \
+              --event pull_request \
+              --status success \
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
+          )
+
+          if [ -z "$dashboard_run_id" ]; then
+            echo "No successful PR dashboard matches develop tree $develop_tree" >&2
+            exit 1
+          fi
+
+          echo "Publishing dashboard from verified PR run $dashboard_run_id"
+          gh run download "$dashboard_run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name benchmark-dashboard \
+            --dir benchmark-report
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
