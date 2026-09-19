@@ -8,6 +8,7 @@ require("./closing-peer-connection");
 require("./connect");
 require("./create-offer");
 require("./custom-settings");
+require("./eventtarget");
 require("./get-configuration");
 require("./i420helpers");
 require("./iceservers");

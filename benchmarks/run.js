@@ -107,6 +107,7 @@ function parseArgs(argv) {
     warmup: 5,
     compareRuns: 1,
     messages: 100,
+    throughputMessages: 1000,
     binaryPayloadBytes: 1024,
     output: "",
     baseline: "",
@@ -135,6 +136,12 @@ function parseArgs(argv) {
 
     if (arg === "--messages" && next) {
       options.messages = Number.parseInt(next, 10);
+      i += 1;
+      continue;
+    }
+
+    if (arg === "--throughput-messages" && next) {
+      options.throughputMessages = Number.parseInt(next, 10);
       i += 1;
       continue;
     }
@@ -254,6 +261,8 @@ function aggregateScenarioResults(resultsPerRun) {
       p95: round(median(values.map((value) => value.p95)), 3),
       stddev: round(median(values.map((value) => value.stddev)), 3),
       runs: values.length,
+      unit: values[0].unit,
+      lowerIsBetter: values[0].lowerIsBetter,
     };
   });
 
@@ -504,8 +513,80 @@ async function benchmarkDataChannelBinaryRtt(options) {
   }
 }
 
-function formatMs(value) {
-  return round(value, 3).toFixed(3) + " ms";
+async function benchmarkDataChannelThroughput(options, binary) {
+  let localDataChannel = null;
+  let remoteDataChannelPromise = null;
+  let remoteDataChannel = null;
+  const peers = await negotiateRTCPeerConnections({
+    withPc1(pc1) {
+      localDataChannel = pc1.createDataChannel(
+        binary ? "bench-throughput-binary" : "bench-throughput-text",
+      );
+    },
+    withPc2(pc2) {
+      remoteDataChannelPromise = new Promise((resolve) => {
+        pc2.addEventListener("datachannel", (event) => resolve(event.channel));
+      });
+    },
+  });
+  const [pc1, pc2] = peers;
+
+  try {
+    remoteDataChannel = await remoteDataChannelPromise;
+    await Promise.all([
+      waitForChannelOpen(localDataChannel),
+      waitForChannelOpen(remoteDataChannel),
+    ]);
+
+    const count = options.throughputMessages;
+    const payload = binary
+      ? new Uint8Array(options.binaryPayloadBytes)
+      : "x".repeat(options.binaryPayloadBytes);
+    let received = 0;
+    let resolveReceived;
+    let rejectReceived;
+    const allReceived = new Promise((resolve, reject) => {
+      resolveReceived = resolve;
+      rejectReceived = reject;
+    });
+    const timeout = setTimeout(() => {
+      rejectReceived(
+        new Error(`Throughput benchmark received ${received}/${count} messages`),
+      );
+    }, 30000);
+    const onMessage = () => {
+      received += 1;
+      if (received === count) resolveReceived();
+    };
+    remoteDataChannel.addEventListener("message", onMessage);
+
+    const started = performance.now();
+    for (let index = 0; index < count; index += 1) {
+      localDataChannel.send(payload);
+    }
+    await allReceived.finally(() => {
+      clearTimeout(timeout);
+      remoteDataChannel.removeEventListener("message", onMessage);
+    });
+    const seconds = (performance.now() - started) / 1000;
+    if (binary) {
+      return (count * options.binaryPayloadBytes) / (1024 * 1024) / seconds;
+    }
+    return count / seconds;
+  } finally {
+    if (localDataChannel && localDataChannel.readyState !== "closed") {
+      localDataChannel.close();
+    }
+    if (remoteDataChannel && remoteDataChannel.readyState !== "closed") {
+      remoteDataChannel.close();
+    }
+    pc1.close();
+    pc2.close();
+  }
+}
+
+function formatValue(value, unit = "ms") {
+  return round(value, 3).toFixed(3) + " " + unit;
 }
 
 function computeComparison(result, baseline, threshold) {
@@ -534,7 +615,11 @@ function computeComparison(result, baseline, threshold) {
       currentMean: round(current.mean, 3),
       deltaMs: round(delta, 3),
       deltaPercent: round(deltaPercent, 2),
-      regression: deltaPercent > threshold,
+      lowerIsBetter: current.lowerIsBetter !== false,
+      regression:
+        current.lowerIsBetter === false
+          ? deltaPercent < -threshold
+          : deltaPercent > threshold,
     };
   });
 
@@ -565,13 +650,16 @@ function printResult(result) {
   Object.keys(result.scenarios).forEach((name) => {
     const scenario = result.scenarios[name];
     console.log(name + ":");
-    console.log("  mean   : " + formatMs(scenario.mean));
-    console.log("  median : " + formatMs(scenario.median));
-    console.log("  p95    : " + formatMs(scenario.p95));
+    console.log("  mean   : " + formatValue(scenario.mean, scenario.unit));
+    console.log("  median : " + formatValue(scenario.median, scenario.unit));
+    console.log("  p95    : " + formatValue(scenario.p95, scenario.unit));
     console.log(
-      "  min/max: " + formatMs(scenario.min) + " / " + formatMs(scenario.max),
+      "  min/max: " +
+        formatValue(scenario.min, scenario.unit) +
+        " / " +
+        formatValue(scenario.max, scenario.unit),
     );
-    console.log("  stddev : " + formatMs(scenario.stddev));
+    console.log("  stddev : " + formatValue(scenario.stddev, scenario.unit));
     console.log("");
   });
 
@@ -636,6 +724,12 @@ async function run() {
   if (!Number.isFinite(options.messages) || options.messages <= 0) {
     throw new Error("--messages must be > 0");
   }
+  if (
+    !Number.isFinite(options.throughputMessages) ||
+    options.throughputMessages <= 0
+  ) {
+    throw new Error("--throughput-messages must be > 0");
+  }
   if (!Number.isFinite(options.compareRuns) || options.compareRuns <= 0) {
     throw new Error("--compare-runs must be > 0");
   }
@@ -650,18 +744,38 @@ async function run() {
     {
       name: "pc_create_close_ms",
       run: benchmarkPeerConnectionCreateClose,
+      unit: "ms",
+      lowerIsBetter: true,
     },
     {
       name: "pc_negotiate_datachannel_open_ms",
       run: benchmarkNegotiationToDataChannelOpen,
+      unit: "ms",
+      lowerIsBetter: true,
     },
     {
       name: "datachannel_unordered_unreliable_rtt_ms",
       run: () => benchmarkDataChannelRtt(options),
+      unit: "ms",
+      lowerIsBetter: true,
     },
     {
       name: "datachannel_unordered_unreliable_binary_rtt_ms",
       run: () => benchmarkDataChannelBinaryRtt(options),
+      unit: "ms",
+      lowerIsBetter: true,
+    },
+    {
+      name: "datachannel_text_throughput_messages_per_second",
+      run: () => benchmarkDataChannelThroughput(options, false),
+      unit: "messages/s",
+      lowerIsBetter: false,
+    },
+    {
+      name: "datachannel_binary_throughput_mib_per_second",
+      run: () => benchmarkDataChannelThroughput(options, true),
+      unit: "MiB/s",
+      lowerIsBetter: false,
     },
   ];
 
@@ -671,6 +785,9 @@ async function run() {
 
     for (let s = 0; s < scenarios.length; s += 1) {
       const scenario = scenarios[s];
+      console.log(
+        `Running ${scenario.name} (pass ${runIndex + 1}/${options.compareRuns})`,
+      );
 
       for (let warmup = 0; warmup < options.warmup; warmup += 1) {
         await scenario.run();
@@ -682,7 +799,11 @@ async function run() {
         samples.push(sample);
       }
 
-      scenarioResults[scenario.name] = summarize(samples);
+      scenarioResults[scenario.name] = {
+        ...summarize(samples),
+        unit: scenario.unit,
+        lowerIsBetter: scenario.lowerIsBetter,
+      };
     }
 
     allRunResults.push(scenarioResults);

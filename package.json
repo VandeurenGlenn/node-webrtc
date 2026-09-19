@@ -77,6 +77,8 @@
     "bench:compare:node26": "node benchmarks/run.js --baseline benchmarks/baseline-node26.json --fail-on-regression --regression-threshold 5",
     "bench:compare:stable": "node benchmarks/run.js --baseline benchmarks/baseline-stable.json --fail-on-regression --regression-threshold 5 --compare-runs 3",
     "bench:compare:node26:stable": "node benchmarks/run.js --baseline benchmarks/baseline-node26-stable.json --fail-on-regression --regression-threshold 5 --compare-runs 3",
+    "bench:profile:linux": "perf record -g -- node benchmarks/run.js --iterations 5 --warmup 1 --throughput-messages 5000",
+    "bench:profile:macos": "xcrun xctrace record --template 'Time Profiler' --launch -- node benchmarks/run.js --iterations 5 --warmup 1 --throughput-messages 5000",
     "install": "node scripts/download-prebuilt-or-build-from-source.js",
     "install-example": "node scripts/install-example.js",
     "lint": "eslint benchmarks scripts test eslint.config.js rollup.config.js",

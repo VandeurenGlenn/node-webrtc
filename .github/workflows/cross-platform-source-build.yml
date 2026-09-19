@@ -446,6 +446,41 @@ jobs:
             --messages 10 \
             --output benchmarks/implementations/vandeurenglenn-wrtc.json
 
+      - name: Setup legacy Node.js for Koush wrtc
+        uses: actions/setup-node@v7
+        with:
+          node-version: 14.21.3
+
+      - name: Benchmark Koush legacy implementation
+        shell: bash
+        run: |
+          install_dir="$RUNNER_TEMP/webrtc-implementations/koush-wrtc"
+          output="benchmarks/implementations/koush-wrtc.json"
+          mkdir -p "$install_dir"
+          if npm install --prefix "$install_dir" --no-package-lock 'wrtc@0.4.7'; then
+            module_path="$(node -e 'console.log(require.resolve(process.argv[1], { paths: [process.argv[2]] }))' wrtc "$install_dir")"
+            if node benchmarks/run.js \
+              --suite implementation-comparison \
+              --implementation 'Koush wrtc 0.4.7' \
+              --module "$module_path" \
+              --iterations 5 \
+              --warmup 1 \
+              --compare-runs 3 \
+              --messages 10 \
+              --output "$output"; then
+              exit 0
+            fi
+            reason='installed on Node 14 but benchmark API is incompatible'
+          else
+            reason='package is unavailable on its legacy Node 14 runtime'
+          fi
+          node benchmarks/unsupported-result.js 'Koush wrtc 0.4.7' "$output" "$reason"
+
+      - name: Restore current Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
       - name: Benchmark alternative implementations
         shell: bash
         run: |
@@ -477,7 +512,6 @@ jobs:
             node benchmarks/unsupported-result.js "$label" "$output" "$reason"
           }
 
-          benchmark_implementation 'Koush wrtc 0.4.7' 'wrtc@0.4.7' 'wrtc' 'koush-wrtc'
           benchmark_implementation '@roamhq/wrtc 0.10.0' '@roamhq/wrtc@0.10.0' '@roamhq/wrtc' 'roamhq-wrtc'
           benchmark_implementation 'werift 0.24.4' 'werift@0.24.4' 'werift' 'werift'
 

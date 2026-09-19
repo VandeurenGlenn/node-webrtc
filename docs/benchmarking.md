@@ -73,6 +73,37 @@ It also runs the shared DataChannel scenarios on Linux against Koush's legacy
 load on the current Node.js release are shown as unsupported instead of making
 the primary build fail.
 
+Koush `wrtc@0.4.7` is run separately on Node.js 14.21.3, its final supported
+Node.js release line. The dashboard labels its runtime explicitly; that result
+is a legacy reference and is not treated as a runtime-equivalent comparison
+with the implementations benchmarked on Node.js 26.
+
+The implementation comparison ranks median duration and shows each result's
+distance from the fastest implementation. Read the scenarios together:
+creating and immediately closing a peer can favor implementations that defer
+ICE, DTLS, SCTP, or native initialization until negotiation. Small differences
+on shared GitHub runners should be confirmed over multiple runs before they
+are treated as optimization targets.
+
+The overall winner uses the geometric mean of normalized scenario ratios. Each
+scenario therefore has equal weight regardless of its millisecond scale. Only
+implementations measured on the same Node.js version as this project are
+eligible; legacy-runtime results remain visible but do not affect the title.
+
+The suite measures both latency and sustained delivery. Latency scenarios are
+reported in milliseconds (lower is better). Text throughput is messages per
+second and binary throughput is MiB per second (higher is better). Throughput
+uses an already-open, ordered DataChannel so setup time does not distort steady
+state delivery. `pc_create_close_ms` covers the lightweight lifecycle, while
+`pc_negotiate_datachannel_open_ms` covers the full connection path through an
+open SCTP DataChannel.
+
+For native profiling, use `npm run bench:profile:linux` with `perf` or
+`npm run bench:profile:macos` with Instruments' Time Profiler. Release addon
+builds can opt into link-time optimization with
+`cmake -DWRTC_ENABLE_LTO=ON`; it remains opt-in because compiler and linker
+support must match on every release platform.
+
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
 
