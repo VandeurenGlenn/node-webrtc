@@ -25,7 +25,7 @@ concurrency:
 jobs:
   tooling:
     name: Lint and dependency audit
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -53,7 +53,7 @@ jobs:
 
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout_minutes || 60 }}
     strategy:
@@ -338,7 +338,18 @@ jobs:
           BENCHMARK_ARTIFACT: benchmark-${{ runner.os }}-${{ runner.arch }}
         run: |
           mkdir -p benchmarks/ci-baseline
-          while IFS= read -r run_id; do
+          develop_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/develop" --jq '.commit.sha')"
+          develop_tree="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/commits/$develop_sha" --jq '.tree.sha'
+          )"
+          while IFS=$'\t' read -r run_id head_sha; do
+            candidate_tree="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
+                --jq '.tree.sha' 2>/dev/null || true
+            )"
+            if [ "$candidate_tree" != "$develop_tree" ]; then
+              continue
+            fi
             if gh run download "$run_id" \
               --repo "$GITHUB_REPOSITORY" \
               --name "$BENCHMARK_ARTIFACT" \
@@ -346,7 +357,7 @@ jobs:
               baseline_file="$(find benchmarks/ci-baseline -type f -name '*.json' | head -n 1)"
               if [ -n "$baseline_file" ]; then
                 echo "path=$baseline_file" >> "$GITHUB_OUTPUT"
-                echo "Using benchmark baseline from develop run $run_id"
+                echo "Using benchmark baseline from merged PR run $run_id"
                 exit 0
               fi
             fi
@@ -354,12 +365,11 @@ jobs:
             gh run list \
               --repo "$GITHUB_REPOSITORY" \
               --workflow cross-platform-source-build.yml \
-              --branch develop \
-              --event push \
+              --event pull_request \
               --status success \
-              --limit 20 \
-              --json databaseId \
-              --jq '.[].databaseId'
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
           )
           echo "No platform baseline found; this run will establish one"
 
@@ -409,7 +419,7 @@ jobs:
 
   native-sanitizers:
     name: Linux native sanitizers
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs: source-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -467,7 +477,7 @@ jobs:
 
   linux-performance-profile:
     name: Linux DataChannel performance profile
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs: source-build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -533,7 +543,7 @@ jobs:
 
   implementation-benchmarks:
     name: Compare Node WebRTC implementations
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs: source-build
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -650,7 +660,7 @@ jobs:
 
   benchmark-report:
     name: Visual benchmark report
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - source-build
       - implementation-benchmarks
@@ -677,16 +687,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p benchmark-history
-          gh run list \
+          gh pr list \
             --repo "$GITHUB_REPOSITORY" \
-            --workflow cross-platform-source-build.yml \
-            --branch develop \
-            --event push \
-            --status success \
+            --base develop \
+            --state merged \
             --limit 20 \
-            --json databaseId \
-            --jq '.[].databaseId' |
-          while read -r run_id; do
+            --json headRefOid \
+            --jq '.[].headRefOid' |
+          while read -r head_sha; do
+            run_id="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-platform-source-build.yml/runs?event=pull_request&status=success&head_sha=$head_sha&per_page=10" \
+                --jq '.workflow_runs[0].id // empty'
+            )"
+            if [ -z "$run_id" ]; then
+              continue
+            fi
             gh run download "$run_id" \
               --repo "$GITHUB_REPOSITORY" \
               --pattern 'benchmark-*' \
@@ -712,7 +727,6 @@ jobs:
   deploy-benchmark-pages:
     name: Publish benchmark dashboard
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
-    needs: benchmark-report
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -723,11 +737,54 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download visual dashboard
-        uses: actions/download-artifact@v7
-        with:
-          name: benchmark-dashboard
-          path: benchmark-report
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download exact-tree PR dashboard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          develop_tree="$(git rev-parse 'HEAD^{tree}')"
+          dashboard_run_id=""
+
+          while IFS=$'\t' read -r run_id head_sha; do
+            candidate_tree="$(
+              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
+                --jq '.tree.sha' 2>/dev/null || true
+            )"
+            if [ "$candidate_tree" != "$develop_tree" ]; then
+              continue
+            fi
+            artifact_count="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+                --jq '[.artifacts[] | select(.expired == false and .name == "benchmark-dashboard")] | length'
+            )"
+            if [ "$artifact_count" -eq 1 ]; then
+              dashboard_run_id="$run_id"
+              break
+            fi
+          done < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow cross-platform-source-build.yml \
+              --event pull_request \
+              --status success \
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
+          )
+
+          if [ -z "$dashboard_run_id" ]; then
+            echo "No successful PR dashboard matches develop tree $develop_tree" >&2
+            exit 1
+          fi
+
+          echo "Publishing dashboard from verified PR run $dashboard_run_id"
+          gh run download "$dashboard_run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name benchmark-dashboard \
+            --dir benchmark-report
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

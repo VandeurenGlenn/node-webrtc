@@ -113,8 +113,11 @@ downloadable artifacts. Its bounded workload measures ten batches of 5,000
 binary messages at 499 Hz, yielding enough samples for native hotspot
 attribution without an open-ended profiling job.
 
-The first `develop` build for a platform establishes its baseline, so an
-earlier pull request can show `baseline pending`.
+Pull requests compare against the latest successful PR whose Git tree matches
+`develop`. Merging does not rerun builds, tests, WPT, sanitizers, or benchmarks:
+the lightweight `develop` workflow publishes the already verified PR dashboard.
+An earlier pull request can show `baseline pending` until such a matching
+successful PR result exists.
 
 ## Notes
 
