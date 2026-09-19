@@ -192,10 +192,61 @@ jobs:
         if: steps.prebuilt.outputs.run-id != ''
         run: node scripts/prepare-webrtc-prebuilt.js
 
+      - name: Find matching tested native addon
+        id: native-addon
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_BASE: native-addon-${{ runner.os }}-${{ runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
+        run: |
+          artifact_name="$ARTIFACT_BASE-${ImageOS:-unknown}"
+          run_id=""
+          while IFS= read -r candidate_run_id; do
+            conclusion="$(
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_run_id" \
+                --jq '.conclusion // empty'
+            )"
+            if [ "$conclusion" = "success" ]; then
+              run_id="$candidate_run_id"
+              break
+            fi
+          done < <(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$artifact_name&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[].workflow_run.id'
+          )
+          echo "name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
+          if [ -n "$run_id" ]; then
+            echo "Reusing tested native addon from successful run $run_id"
+          else
+            echo "No successful matching native addon; this job will compile it"
+          fi
+
+      - name: Download tested native addon
+        if: steps.native-addon.outputs.run-id != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: ${{ steps.native-addon.outputs.name }}
+          ARTIFACT_RUN_ID: ${{ steps.native-addon.outputs.run-id }}
+        run: |
+          gh run download "$ARTIFACT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir reused-native-addon
+          mkdir -p build
+          addon_archive="$(find reused-native-addon -type f -name '*.tar.gz' -print -quit)"
+          if [ -z "$addon_archive" ]; then
+            echo "The native addon artifact contains no package archive" >&2
+            exit 1
+          fi
+          tar -xzf "$addon_archive" -C build
+
       - name: Install package dependencies
         run: npm install --ignore-scripts --omit=dev
 
-      - name: Build from source
+      - name: Compile native addon
+        if: steps.native-addon.outputs.run-id == ''
         env:
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
@@ -347,6 +398,14 @@ jobs:
           name: wrtc-${{ runner.os }}-${{ runner.arch }}
           path: build/stage/**/*.tar.gz
           if-no-files-found: error
+
+      - name: Preserve content-addressed native addon
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.native-addon.outputs.name }}
+          path: build/stage/**/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
 
   native-sanitizers:
     name: Linux native sanitizers
