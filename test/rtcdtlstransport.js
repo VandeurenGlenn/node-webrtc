@@ -10,18 +10,47 @@ const {
 
 const {
   createRTCPeerConnections,
-  gatherCandidates,
   negotiate,
   waitForStateChange
 } = require('./lib/pc');
+
+function createCandidateRelay(source, target) {
+  const pendingCandidates = [];
+  let started = false;
+  let rejectRelay;
+  const failed = new Promise((_, reject) => {
+    rejectRelay = reject;
+  });
+
+  function relay(candidate) {
+    target.addIceCandidate(candidate).catch(rejectRelay);
+  }
+
+  source.addEventListener('icecandidate', ({ candidate }) => {
+    if (!candidate) return;
+    if (started) relay(candidate);
+    else pendingCandidates.push(candidate);
+  });
+
+  return {
+    failed,
+    start() {
+      started = true;
+      pendingCandidates.splice(0).forEach(relay);
+    }
+  };
+}
 
 async function testDtlsTransport(t, createSenderOrReceiver) {
   const [pc1, pc2] = createRTCPeerConnections({}, {}, { handleIce: false });
   const senderOrReceiver = createSenderOrReceiver(pc1);
   t.equal(senderOrReceiver.transport, null, 'transport is initially null');
 
-  const candidates1Promise = gatherCandidates(pc1);
-  const candidates2Promise = gatherCandidates(pc2);
+  // Queue trickled candidates until both remote descriptions exist. Waiting
+  // for ICE gathering to complete before exchanging anything can stall on
+  // virtualized macOS runners even though usable host candidates are ready.
+  const relay1 = createCandidateRelay(pc1, pc2);
+  const relay2 = createCandidateRelay(pc2, pc1);
 
   await negotiate(pc1, pc2);
 
@@ -36,12 +65,8 @@ async function testDtlsTransport(t, createSenderOrReceiver) {
   const connectingPromise = waitForStateChange(transport, 'connecting');
   const connectedPromise = waitForStateChange(transport, 'connected');
 
-  const candidates = await Promise.all([candidates1Promise, candidates2Promise]);
-
-  await Promise.all(
-    candidates[0].map(candidate => pc2.addIceCandidate(candidate)).concat(
-    candidates[1].map(candidate => pc1.addIceCandidate(candidate)))
-  );
+  relay1.start();
+  relay2.start();
 
   if (transport.state !== 'connected') {
     await connectingPromise;
@@ -49,7 +74,7 @@ async function testDtlsTransport(t, createSenderOrReceiver) {
   t.ok(transport.state === 'connecting' || transport.state === 'connected', '.state transitions to "connecting" (or "connected")');
   t.ok(transport.iceTransport.state === 'checking' || transport.iceTransport.state === 'connected', '.state transitions to "checking" (or "connected")');
 
-  await connectedPromise;
+  await Promise.race([connectedPromise, relay1.failed, relay2.failed]);
 
   t.pass('"statechange" fires in state "connected"');
   t.equal(transport.state, 'connected', '.state is "connected"');

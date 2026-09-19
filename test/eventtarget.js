@@ -2,7 +2,7 @@
 
 const test = require('./lib/test');
 
-test('EventTarget batches asynchronous dispatch without changing order', async t => {
+test('EventTarget dispatches asynchronously without changing order', async t => {
   const { default: EventTarget } = await import('../lib/eventtarget.js');
   const target = new EventTarget();
   const calls = [];
@@ -17,16 +17,15 @@ test('EventTarget batches asynchronous dispatch without changing order', async t
   t.end();
 });
 
-test('EventTarget keeps one native re-entry boundary per dispatch batch', async t => {
+test('EventTarget honors listener removal before asynchronous delivery', async t => {
   const { default: EventTarget } = await import('../lib/eventtarget.js');
   const target = new EventTarget();
-  target.addEventListener('message', () => {});
+  const calls = [];
+  const listener = () => calls.push('listener');
+  target.addEventListener('message', listener);
   target.dispatchEvent({ type: 'message' });
-  target.dispatchEvent({ type: 'message' });
-  t.equal(target._pendingEvents.length, 2);
-  t.equal(target._eventDispatchScheduled, true);
+  target.removeEventListener('message', listener);
   await new Promise(resolve => process.nextTick(resolve));
-  t.equal(target._pendingEvents.length, 0);
-  t.equal(target._eventDispatchScheduled, false);
+  t.deepEqual(calls, []);
   t.end();
 });
