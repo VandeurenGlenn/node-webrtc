@@ -447,14 +447,14 @@ jobs:
           sudo sysctl -w kernel.perf_event_paranoid=-1 || true
           sudo sysctl -w kernel.kptr_restrict=0 || true
           sudo --preserve-env=PATH perf record \
-            --freq 199 \
+            --freq 499 \
             --call-graph dwarf \
             --output performance-profile/perf.data \
             -- node benchmarks/run.js \
               --scenario datachannel_binary_throughput_mib_per_second \
-              --iterations 2 \
+              --iterations 10 \
               --warmup 1 \
-              --throughput-messages 1000 \
+              --throughput-messages 5000 \
               --output performance-profile/benchmark.json
           sudo perf report \
             --stdio \

@@ -876,6 +876,7 @@ async function run() {
       warmup: options.warmup,
       compareRuns: options.compareRuns,
       messagesPerIteration: options.messages,
+      throughputMessagesPerIteration: options.throughputMessages,
       binaryPayloadBytes: options.binaryPayloadBytes,
       implementation: options.implementation,
       suite: options.suite,

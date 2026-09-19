@@ -109,7 +109,9 @@ support must match on every release platform.
 Pass `--scenario <name>` one or more times to restrict a local run or profiler
 capture to specific scenarios. CI stores the Linux binary-throughput
 `perf.data`, a text report, and the corresponding benchmark JSON as
-downloadable artifacts.
+downloadable artifacts. Its bounded workload measures ten batches of 5,000
+binary messages at 499 Hz, yielding enough samples for native hotspot
+attribution without an open-ended profiling job.
 
 The first `develop` build for a platform establishes its baseline, so an
 earlier pull request can show `baseline pending`.
