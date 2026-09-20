@@ -10,9 +10,11 @@
 #include <utility>
 
 #include <webrtc/api/data_channel_interface.h>
+#include <webrtc/api/rtc_error.h>
 #include <webrtc/api/scoped_refptr.h>
 #include <webrtc/rtc_base/copy_on_write_buffer.h>
 
+#include "src/dictionaries/node_webrtc/some_error.h"
 #include "src/enums/node_webrtc/binary_type.h"
 #include "src/enums/webrtc/data_state.h"
 #include "src/interfaces/rtc_peer_connection/peer_connection_factory.h"
@@ -225,6 +227,32 @@ void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuf
   channel.MakeCallback("dispatchEvent", { object });
 }
 
+void RTCDataChannel::SendAsync(webrtc::DataBuffer buffer) {
+  _jingleDataChannel->SendAsync(std::move(buffer), [this](webrtc::RTCError rtcError) {
+    if (rtcError.ok()) {
+      return;
+    }
+
+    auto maybeError = From<SomeError>(&rtcError);
+    if (maybeError.IsInvalid()) {
+      return;
+    }
+
+    auto error = maybeError.UnsafeFromValid();
+    Dispatch(CreateCallback<RTCDataChannel>([this, error]() {
+      auto env = Env();
+      Napi::HandleScope scope(env);
+      auto maybeValue = From<Napi::Value>(std::make_pair(env, error));
+      if (maybeValue.IsValid()) {
+        auto event = Napi::Object::New(env);
+        event.Set("type", Napi::String::New(env, "error"));
+        event.Set("error", maybeValue.UnsafeFromValid());
+        MakeCallback("dispatchEvent", { event });
+      }
+    }));
+  });
+}
+
 Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
   auto env = info.Env();
   if (_jingleDataChannel != nullptr) {
@@ -237,7 +265,7 @@ Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
       auto data = str.Utf8Value();
 
       webrtc::DataBuffer buffer(data);
-      _jingleDataChannel->Send(buffer);
+      SendAsync(std::move(buffer));
     } else {
       Napi::ArrayBuffer arraybuffer;
       size_t byte_offset = 0;
@@ -265,7 +293,7 @@ Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
       rtc::CopyOnWriteBuffer buffer(content + byte_offset, byte_length);
 
       webrtc::DataBuffer data_buffer(buffer, true);
-      _jingleDataChannel->Send(data_buffer);
+      SendAsync(std::move(data_buffer));
     }
   } else {
     Napi::Error(env, ErrorFactory::CreateInvalidStateError(env, "RTCDataChannel.readyState is not 'open'")).ThrowAsJavaScriptException();
