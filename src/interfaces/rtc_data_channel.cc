@@ -62,7 +62,8 @@ static void requeue(DataChannelObserver& observer, RTCDataChannel& channel) {
 
 RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
   : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info)
-  , _binaryType(BinaryType::kArrayBuffer) {
+  , _binaryType(BinaryType::kArrayBuffer)
+  , _state(webrtc::DataChannelInterface::DataState::kConnecting) {
   auto env = info.Env();
 
   if (!info.IsConstructCall() || !info[0].IsExternal()) {
@@ -77,6 +78,7 @@ RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
 
   _jingleDataChannel = observer->_jingleDataChannel;
   _jingleDataChannel->RegisterObserver(this);
+  _state.store(_jingleDataChannel->state(), std::memory_order_relaxed);
 
   // Re-queue cached observer events
   requeue(*observer, *this);
@@ -100,6 +102,7 @@ RTCDataChannel::~RTCDataChannel() {
 }  // NOLINT
 
 void RTCDataChannel::CleanupInternals() {
+  _state.store(webrtc::DataChannelInterface::DataState::kClosed, std::memory_order_relaxed);
   if (_jingleDataChannel == nullptr) {
     return;
   }
@@ -128,6 +131,7 @@ void RTCDataChannel::OnPeerConnectionClosed() {
 
 void RTCDataChannel::OnStateChange() {
   auto state = _jingleDataChannel->state();
+  _state.store(state, std::memory_order_relaxed);
   if (state == webrtc::DataChannelInterface::kClosed) {
     CleanupInternals();
   }
@@ -224,7 +228,7 @@ void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuf
 Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
   auto env = info.Env();
   if (_jingleDataChannel != nullptr) {
-    if (_jingleDataChannel->state() != webrtc::DataChannelInterface::DataState::kOpen) {
+    if (_state.load(std::memory_order_relaxed) != webrtc::DataChannelInterface::DataState::kOpen) {
       Napi::Error(env, ErrorFactory::CreateInvalidStateError(env, "RTCDataChannel.readyState is not 'open'")).ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -273,6 +277,11 @@ Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
 
 Napi::Value RTCDataChannel::Close(const Napi::CallbackInfo& info) {
   if (_jingleDataChannel != nullptr) {
+    auto state = _state.load(std::memory_order_relaxed);
+    if (state != webrtc::DataChannelInterface::DataState::kClosing &&
+        state != webrtc::DataChannelInterface::DataState::kClosed) {
+      _state.store(webrtc::DataChannelInterface::DataState::kClosing, std::memory_order_relaxed);
+    }
     _jingleDataChannel->Close();
   }
   return info.Env().Undefined();
@@ -349,9 +358,7 @@ Napi::Value RTCDataChannel::GetProtocol(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value RTCDataChannel::GetReadyState(const Napi::CallbackInfo& info) {
-  auto state = _jingleDataChannel
-      ? _jingleDataChannel->state()
-      : webrtc::DataChannelInterface::kClosed;
+  auto state = _state.load(std::memory_order_relaxed);
   CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), state, result, Napi::Value)
   return result;
 }

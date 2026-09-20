@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include <iosfwd>
 #include <memory>
 
@@ -78,6 +79,7 @@ class RTCDataChannel
   void CleanupInternals();
 
   BinaryType _binaryType;
+  std::atomic<webrtc::DataChannelInterface::DataState> _state;
   int _cached_id;
   std::string _cached_label;
   uint16_t _cached_max_packet_life_time;
