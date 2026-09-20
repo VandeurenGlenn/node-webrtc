@@ -10,6 +10,7 @@
 #include <atomic>
 #include <iosfwd>
 #include <memory>
+#include <mutex>
 
 #include <webrtc/api/data_channel_interface.h>
 #include <webrtc/api/scoped_refptr.h>
@@ -52,6 +53,13 @@ class RTCDataChannel
   > * wrap();
 
  private:
+  struct AsyncSendState {
+    explicit AsyncSendState(RTCDataChannel* channel): channel(channel) {}
+
+    std::mutex mutex;
+    RTCDataChannel* channel;
+  };
+
   static RTCDataChannel* Create(
       node_webrtc::DataChannelObserver*,
       rtc::scoped_refptr<webrtc::DataChannelInterface>);
@@ -81,6 +89,7 @@ class RTCDataChannel
 
   BinaryType _binaryType;
   std::atomic<webrtc::DataChannelInterface::DataState> _state;
+  std::shared_ptr<AsyncSendState> _asyncSendState;
   int _cached_id;
   std::string _cached_label;
   uint16_t _cached_max_packet_life_time;

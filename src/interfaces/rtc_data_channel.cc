@@ -65,7 +65,8 @@ static void requeue(DataChannelObserver& observer, RTCDataChannel& channel) {
 RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
   : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info)
   , _binaryType(BinaryType::kArrayBuffer)
-  , _state(webrtc::DataChannelInterface::DataState::kConnecting) {
+  , _state(webrtc::DataChannelInterface::DataState::kConnecting)
+  , _asyncSendState(std::make_shared<AsyncSendState>(this)) {
   auto env = info.Env();
 
   if (!info.IsConstructCall() || !info[0].IsExternal()) {
@@ -97,6 +98,11 @@ RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
 }
 
 RTCDataChannel::~RTCDataChannel() {
+  {
+    std::lock_guard<std::mutex> lock(_asyncSendState->mutex);
+    _asyncSendState->channel = nullptr;
+  }
+
   _factory->Unref();
   _factory = nullptr;
 
@@ -228,7 +234,8 @@ void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuf
 }
 
 void RTCDataChannel::SendAsync(webrtc::DataBuffer buffer) {
-  _jingleDataChannel->SendAsync(std::move(buffer), [this](webrtc::RTCError rtcError) {
+  auto state = _asyncSendState;
+  _jingleDataChannel->SendAsync(std::move(buffer), [state = std::move(state)](webrtc::RTCError rtcError) {
     if (rtcError.ok()) {
       return;
     }
@@ -239,15 +246,20 @@ void RTCDataChannel::SendAsync(webrtc::DataBuffer buffer) {
     }
 
     auto error = maybeError.UnsafeFromValid();
-    Dispatch(CreateCallback<RTCDataChannel>([this, error]() {
-      auto env = Env();
+    std::lock_guard<std::mutex> lock(state->mutex);
+    if (state->channel == nullptr) {
+      return;
+    }
+
+    state->channel->Dispatch(Callback1<RTCDataChannel>::Create([error](RTCDataChannel& channel) {
+      auto env = channel.Env();
       Napi::HandleScope scope(env);
       auto maybeValue = From<Napi::Value>(std::make_pair(env, error));
       if (maybeValue.IsValid()) {
         auto event = Napi::Object::New(env);
         event.Set("type", Napi::String::New(env, "error"));
         event.Set("error", maybeValue.UnsafeFromValid());
-        MakeCallback("dispatchEvent", { event });
+        channel.MakeCallback("dispatchEvent", { event });
       }
     }));
   });
