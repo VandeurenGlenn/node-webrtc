@@ -516,7 +516,8 @@ else()
     target_compile_options(${MODULE} PRIVATE
       -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
     )
-    # M152's Clang can emit LLVM objects that GNU ld/collect2 cannot consume.
+    # WebRTC's pinned Clang can emit LLVM objects that GNU ld/collect2 cannot
+    # consume.
     # Use the matching Chromium lld while retaining the system libstdc++ ABI.
     set_property(TARGET ${MODULE} APPEND_STRING PROPERTY LINK_FLAGS
       " -B${chromium_llvm_bin} -fuse-ld=lld"

@@ -12,7 +12,7 @@
 [![WPT](https://img.shields.io/endpoint?url=https%3A%2F%2Fvandeurenglenn.github.io%2Fnode-webrtc%2Fwpt-badge.json)](https://github.com/VandeurenGlenn/node-webrtc/actions/workflows/cross-platform-source-build.yml)
 [![benchmarks](https://img.shields.io/badge/benchmarks-dashboard-a371f7)](https://vandeurenglenn.github.io/node-webrtc/)
 
-node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M152, branch-heads/7977](https://chromium.googlesource.com/external/webrtc/+/branch-heads/7977). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
+node-webrtc is a Node.js Native Addon that provides bindings to [WebRTC M154, branch-heads/8037](https://chromium.googlesource.com/external/webrtc/+/branch-heads/8037). This project aims for spec-compliance and is tested using the W3C's [web-platform-tests](https://github.com/web-platform-tests/wpt) project. A number of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also included.
 
 Modern source builds are continuously tested with Node.js 24 and 26 on Linux,
 macOS, and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium

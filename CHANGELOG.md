@@ -4,6 +4,7 @@
 New Features
 ------------
 
+- Updated the native WebRTC dependency from M152 to M154.
 - Updated the package interface with explicit ESM exports and TypeScript types.
 - Added Node.js 24 compatibility checks, Web Platform Tests, native sanitizers,
   release checksums, an SBOM, and npm provenance to CI.

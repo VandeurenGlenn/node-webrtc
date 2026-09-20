@@ -15,7 +15,7 @@ developer checks are wanted; normal builds keep them off.
 CI preserves a completed libwebrtc build even if the later addon compile or
 link step fails, so follow-up fixes do not repeat the dependency build.
 
-node-webrtc builds the pinned WebRTC M152 (`branch-heads/7977`) checkout with
+node-webrtc builds the pinned WebRTC M154 (`branch-heads/8037`) checkout with
 [node-cmake](https://github.com/cjntaylor/node-cmake).
 
 ## Prerequisites
@@ -27,9 +27,9 @@ npm. In addition, install:
 * macOS: Xcode Command Line Tools and Ninja.
 * Windows: Microsoft Visual Studio 2022 with the Desktop development with C++
   workload. CI compiles the addon with `clang-cl` and links with `lld-link`,
-  matching the LLVM archive format produced by WebRTC M152. The Windows SDK
-  resource compiler is pinned explicitly so npm's unrelated `rc` executable
-  cannot shadow `rc.exe`.
+  matching the LLVM archive format produced by the pinned WebRTC revision. The
+  Windows SDK resource compiler is pinned explicitly so npm's unrelated `rc`
+  executable cannot shadow `rc.exe`.
   The bundled BoringSSL symbols receive a `node_webrtc` prefix on Windows to
   avoid collisions with the OpenSSL symbols exported by Node itself.
 
