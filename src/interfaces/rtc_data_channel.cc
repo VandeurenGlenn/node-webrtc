@@ -140,10 +140,10 @@ void RTCDataChannel::OnPeerConnectionClosed() {
 void RTCDataChannel::OnStateChange() {
   auto state = _jingleDataChannel->state();
   _state.store(state, std::memory_order_relaxed);
-  if (state == webrtc::DataChannelInterface::kClosed) {
-    CleanupInternals();
-  }
   Dispatch(CreateCallback<RTCDataChannel>([this, state]() {
+    if (state == webrtc::DataChannelInterface::kClosed) {
+      CleanupInternals();
+    }
     RTCDataChannel::HandleStateChange(*this, state);
   }));
 }

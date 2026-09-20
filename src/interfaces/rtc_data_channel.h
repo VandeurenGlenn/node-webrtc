@@ -43,6 +43,7 @@ class RTCDataChannel
   //
   void OnStateChange() override;
   void OnMessage(const webrtc::DataBuffer& buffer) override;
+  bool IsOkToCallOnTheNetworkThread() override { return true; }
 
   void OnPeerConnectionClosed();
 
@@ -115,6 +116,7 @@ class DataChannelObserver
 
   void OnStateChange() override;
   void OnMessage(const webrtc::DataBuffer& buffer) override;
+  bool IsOkToCallOnTheNetworkThread() override { return true; }
 
   rtc::scoped_refptr<webrtc::DataChannelInterface> channel() { return _jingleDataChannel; }
 
