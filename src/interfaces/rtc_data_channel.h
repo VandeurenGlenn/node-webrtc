@@ -7,8 +7,10 @@
  */
 #pragma once
 
+#include <atomic>
 #include <iosfwd>
 #include <memory>
+#include <mutex>
 
 #include <webrtc/api/data_channel_interface.h>
 #include <webrtc/api/scoped_refptr.h>
@@ -51,6 +53,13 @@ class RTCDataChannel
   > * wrap();
 
  private:
+  struct AsyncSendState {
+    explicit AsyncSendState(RTCDataChannel* channel): channel(channel) {}
+
+    std::mutex mutex;
+    RTCDataChannel* channel;
+  };
+
   static RTCDataChannel* Create(
       node_webrtc::DataChannelObserver*,
       rtc::scoped_refptr<webrtc::DataChannelInterface>);
@@ -58,6 +67,7 @@ class RTCDataChannel
   static void HandleStateChange(RTCDataChannel&, webrtc::DataChannelInterface::DataState);
   static void HandleMessage(RTCDataChannel&, const webrtc::DataBuffer& buffer);
   static void HandleOwnedMessage(RTCDataChannel&, webrtc::DataBuffer* buffer);
+  void SendAsync(webrtc::DataBuffer buffer);
 
   Napi::Value Send(const Napi::CallbackInfo&);
   Napi::Value Close(const Napi::CallbackInfo&);
@@ -78,6 +88,8 @@ class RTCDataChannel
   void CleanupInternals();
 
   BinaryType _binaryType;
+  std::atomic<webrtc::DataChannelInterface::DataState> _state;
+  std::shared_ptr<AsyncSendState> _asyncSendState;
   int _cached_id;
   std::string _cached_label;
   uint16_t _cached_max_packet_life_time;
