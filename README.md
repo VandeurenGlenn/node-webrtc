@@ -22,8 +22,9 @@ share each platform's standard C++ library ABI.
 Node.js 24.15 or newer is required. The package uses the platform-provided
 `DOMException` instead of the deprecated userland polyfill.
 
-Windows source builds use Visual Studio 2022 for CMake and the Node addon;
-WebRTC itself is compiled with its bundled `clang-cl`.
+Windows source builds use Visual Studio 2022 and Windows SDK 10.0.28000 for
+CMake and the Node addon; WebRTC itself is compiled with its bundled
+`clang-cl`.
 
 ---
 

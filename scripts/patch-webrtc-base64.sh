@@ -12,7 +12,11 @@ if [ ! -d "$webrtc_dir" ]; then
   "$python_bin" "$script_dir/patch-webrtc-modern-cpp.py" "$1"
   PYTHON_BIN="$python_bin" "$script_dir/patch-webrtc-media-defaults.sh" "$1"
   if [ "$(uname -s)" = "Darwin" ]; then
-    "$python_bin" "$script_dir/patch-webrtc-apple-clt-modern.py" "$1"
+    if xcodebuild -version >/dev/null 2>&1; then
+      echo "Full Xcode installation detected; skipping Apple CLT compatibility patch"
+    else
+      "$python_bin" "$script_dir/patch-webrtc-apple-clt-modern.py" "$1"
+    fi
   fi
   case "$(uname -s)" in
     CYGWIN*|MINGW*|MSYS*)

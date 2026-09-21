@@ -100,7 +100,7 @@ jobs:
             script_suffix: sh
             platform_patch_1: scripts/patch-webrtc-apple-clt.py
             platform_patch_2: scripts/patch-webrtc-apple-clt-modern.py
-            legacy_artifact: libwebrtc-macOS-ARM64-9e95c104df6f60dd7e91a567f250ef151a2556785012e625a08d492de19c36d2-macos26
+            legacy_artifact: ""
           - os: macos-15-intel
             node: 26
             timeout_minutes: 120
@@ -191,6 +191,39 @@ jobs:
           else
             echo "No matching prebuilt; this job will perform a full WebRTC build"
           fi
+
+      - name: Install Windows SDK 28000
+        if: runner.os == 'Windows' && steps.prebuilt.outputs.run-id == ''
+        shell: pwsh
+        run: |
+          $sdkInclude = "${env:ProgramFiles(x86)}\Windows Kits\10\Include\10.0.28000.0"
+          if (-not (Test-Path $sdkInclude)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'winsdksetup.exe'
+            Invoke-WebRequest `
+              -Uri 'https://download.microsoft.com/download/38ab8f6d-3676-4860-ae84-3361308b9d7f/KIT_BUNDLE_WINDOWSSDK_MEDIACREATION/winsdksetup.exe' `
+              -OutFile $installer
+            $signature = Get-AuthenticodeSignature $installer
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Microsoft*') {
+              throw "Windows SDK installer signature is not valid: $($signature.Status)"
+            }
+            $process = Start-Process `
+              -FilePath $installer `
+              -ArgumentList '/features', 'OptionId.DesktopCPPx64', '/quiet', '/norestart' `
+              -Wait `
+              -PassThru
+            if ($process.ExitCode -notin 0, 3010) {
+              throw "Windows SDK installer failed with exit code $($process.ExitCode)"
+            }
+          }
+          if (-not (Test-Path $sdkInclude)) {
+            throw 'Windows SDK 10.0.28000.0 was not installed'
+          }
+          $resourceCompiler = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.28000.0\x64\rc.exe"
+          if (-not (Test-Path $resourceCompiler)) {
+            throw 'Windows SDK 10.0.28000.0 resource compiler was not installed'
+          }
+          "RC=$resourceCompiler" >> $env:GITHUB_ENV
+          Write-Host "Using Windows SDK 10.0.28000.0"
 
       - name: Download matching WebRTC prebuilt
         if: steps.prebuilt.outputs.run-id != ''
