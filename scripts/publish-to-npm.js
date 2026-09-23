@@ -42,7 +42,6 @@ const jsonFields = [
   "engines",
   "dependencies",
   "optionalDependencies",
-  "bundledDependencies",
 ];
 
 const relativeLinks = ["docs/build-from-source.md", "docs/nonstandard-apis.md"];
@@ -65,6 +64,8 @@ async function main() {
   jsonFields.forEach((jsonField) => {
     packageJson[jsonField] = rootPackageJson[jsonField];
   });
+  delete packageJson.bundleDependencies;
+  delete packageJson.bundledDependencies;
   await writeFile(
     join(packageDirectory, "package.json"),
     JSON.stringify(packageJson, null, 2),
