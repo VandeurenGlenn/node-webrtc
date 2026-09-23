@@ -35,14 +35,16 @@ Install
 npm install @vandeurenglenn/wrtc
 ```
 
-Installing from NPM downloads a prebuilt binary for your operating system × architecture. Set the `TARGET_ARCH` environment variable to "arm" or "arm64" to download for armv7l or arm64, respectively. Linux and macOS users can also set the `DEBUG` environment variable to download debug builds.
+The package manager selects a small optional native package for the current
+operating system and architecture. Installation does not execute a downloader
+or build script.
 
 You can also [build from source](docs/build-from-source.md).
 
 Supported Platforms
 -------------------
 
-Release `v0.7.0` provides N-API v3 binaries for Linux x64, macOS
+Release `v0.7.1` provides N-API v3 binaries for Linux x64, macOS
 x64/arm64, and Windows x64. N-API keeps those binaries ABI-compatible across
 supported Node.js versions. Other platform and architecture combinations can
 use the [source build](docs/build-from-source.md).

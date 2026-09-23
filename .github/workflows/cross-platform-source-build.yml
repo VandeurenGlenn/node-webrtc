@@ -460,7 +460,7 @@ jobs:
           retention-days: 90
 
       - name: Package native addon
-        run: npm run node-pre-gyp-package
+        run: npm run package-native-addon
 
       - name: Preserve tested native addon
         uses: actions/upload-artifact@v7
@@ -977,6 +977,17 @@ jobs:
             | xargs -0 sha256sum > release-assets/SHA256SUMS
           npm sbom --sbom-format cyclonedx > release-assets/sbom.cdx.json
 
+      - name: Prepare npm release packages
+        shell: bash
+        run: |
+          node scripts/create-native-platform-packages.js \
+            release-assets \
+            "$RUNNER_TEMP/native-platform-packages"
+          node scripts/publish-native-platforms.js \
+            --packages "$RUNNER_TEMP/native-platform-packages" \
+            --pack "$RUNNER_TEMP/native-platform-tarballs"
+          node scripts/publish-to-npm.js --pack "$RUNNER_TEMP/release-package"
+
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -995,13 +1006,19 @@ jobs:
       - name: Verify the published install path
         shell: bash
         run: |
-          node scripts/publish-to-npm.js --pack "$RUNNER_TEMP/release-package"
           package_archive="$(find "$RUNNER_TEMP/release-package" -type f -name '*.tgz' -print -quit)"
+          native_archive="$(find "$RUNNER_TEMP/native-platform-tarballs" -type f -name '*wrtc-linux-x64-*.tgz' -print -quit)"
           install_dir="$(mktemp -d)"
           cd "$install_dir"
           npm init -y >/dev/null
-          npm install "$package_archive"
+          npm install "$native_archive" "$package_archive"
           node -e "import('@vandeurenglenn/wrtc').then(wrtc => console.log('installed release ok', !!wrtc))"
+
+      - name: Publish native platform packages to npm with provenance
+        run: |
+          node scripts/publish-native-platforms.js \
+            --packages "$RUNNER_TEMP/native-platform-packages" \
+            --provenance
 
       - name: Publish package to npm with provenance
         run: node scripts/publish-to-npm.js --provenance
