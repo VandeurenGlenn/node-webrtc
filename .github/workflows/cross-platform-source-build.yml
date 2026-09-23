@@ -343,13 +343,28 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Setup Web Platform Test Python
+        if: runner.os == 'Linux'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
       - name: Initialize Web Platform Tests
         if: runner.os == 'Linux'
         run: npm run wpt:init
 
+      - name: Configure Web Platform Test hosts
+        id: wpt-hosts
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        working-directory: test/web-platform-tests/tests
+        run: |
+          ./wpt make-hosts-file | sudo tee -a /etc/hosts > /dev/null
+          getent hosts web-platform.test
+
       - name: Run Web Platform Tests
         id: wpt
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
         run: npm run wpt:test
 
@@ -357,10 +372,14 @@ jobs:
         if: always() && runner.os == 'Linux'
         shell: bash
         env:
+          WPT_HOSTS_OUTCOME: ${{ steps.wpt-hosts.outcome }}
           WPT_OUTCOME: ${{ steps.wpt.outcome }}
         run: |
           mkdir -p wpt-status
-          if [ "$WPT_OUTCOME" = "success" ]; then
+          if [ "$WPT_HOSTS_OUTCOME" != "success" ]; then
+            message="setup error"
+            color=orange
+          elif [ "$WPT_OUTCOME" = "success" ]; then
             message=passing
             color=brightgreen
           else
