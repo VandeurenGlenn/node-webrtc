@@ -44,9 +44,6 @@
     "node-addon-api": "^8.9.2",
     "node-cmake": "2.5.1"
   },
-  "bundledDependencies": [
-    "@mapbox/node-pre-gyp"
-  ],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fidm/x509": "^1.2.1",
@@ -89,8 +86,5 @@
     "wpt:reset": "node scripts/reset-wpt.js && npm run wpt:init",
     "wpt:test": "mocha test/web-platform-tests/run-wpts.js --exit",
     "wpt:update": "git submodule update --recursive --remote --force && cd test/web-platform-tests/tests && python wpt.py manifest --path ../wpt-manifest.json"
-  },
-  "bundleDependencies": [
-    "@mapbox/node-pre-gyp"
-  ]
+  }
 }
