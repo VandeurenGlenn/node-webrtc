@@ -6,6 +6,7 @@ import { createRequire } from "module";
 import { tmpdir } from "os";
 import { join } from "path";
 import { fileURLToPath } from "url";
+import { nativePlatforms } from "./native-platforms.js";
 
 const require = createRequire(import.meta.url);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -17,7 +18,6 @@ const githubUrl =
 
 const paths = [
   "lib",
-  "scripts/download-prebuilt.js",
   "LICENSE.md",
   "README.md",
   "THIRD_PARTY_LICENSES.md",
@@ -38,10 +38,7 @@ const jsonFields = [
   "types",
   "exports",
   "browser",
-  "binary",
   "engines",
-  "dependencies",
-  "optionalDependencies",
 ];
 
 const relativeLinks = ["docs/build-from-source.md", "docs/nonstandard-apis.md"];
@@ -66,6 +63,12 @@ async function main() {
   });
   delete packageJson.bundleDependencies;
   delete packageJson.bundledDependencies;
+  packageJson.optionalDependencies = Object.fromEntries(
+    nativePlatforms.map(({ packageName }) => [
+      packageName,
+      rootPackageJson.version,
+    ]),
+  );
   await writeFile(
     join(packageDirectory, "package.json"),
     JSON.stringify(packageJson, null, 2),
@@ -102,12 +105,24 @@ async function main() {
     await mkdir(packDestination, { recursive: true });
   }
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  const { status } = spawnSync(npmCommand, publishArgs, {
-    stdio: "inherit",
+  const result = spawnSync(npmCommand, publishArgs, {
+    encoding: "utf8",
     cwd: packageDirectory,
   });
+  process.stdout.write(result.stdout || "");
+  process.stderr.write(result.stderr || "");
   await rm(packageDirectory, { recursive: true, force: true });
-  if (status) {
+  if (
+    result.status &&
+    !packDestination &&
+    /cannot publish over (?:the )?previously published versions/i.test(
+      `${result.stdout}\n${result.stderr}`,
+    )
+  ) {
+    console.log(`${name}@${rootPackageJson.version} is already published`);
+    return;
+  }
+  if (result.status) {
     throw new Error(packDestination ? "npm pack failed" : "npm publish failed");
   }
 }

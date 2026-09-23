@@ -1,3 +1,18 @@
+0.7.1
+=====
+
+New Features
+------------
+
+- Distribute native addons as platform-specific optional npm packages.
+- Load the matching native package without running an install-time downloader.
+
+Bug Fixes
+---------
+
+- Make release publication idempotent for platform packages after a partial
+  registry failure.
+
 0.7.0
 =====
 

@@ -274,7 +274,7 @@ if(WRTC_ENABLE_SANITIZERS)
   target_link_options(${MODULE} PRIVATE -fno-omit-frame-pointer -fsanitize=address,undefined)
 endif()
 
-# The JavaScript loader and node-pre-gyp packaging both expect the Windows
+# The JavaScript loader and release packaging both expect the Windows
 # addon in build/Release. Multi-config Visual Studio generators put it there
 # automatically, while the single-config Ninja generator otherwise writes it
 # directly to the build root.
