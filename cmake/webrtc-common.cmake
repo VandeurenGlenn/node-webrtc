@@ -1,8 +1,8 @@
-# branch-heads/7977 (Chromium/WebRTC M152). Pin the resolved commit so builds do
+# branch-heads/8037 (Chromium/WebRTC M154). Pin the resolved commit so builds do
 # not change when upstream updates the release branch.
 set(
   WEBRTC_REVISION
-  6f37672d358475cd17544121a12494da454d85fb
+  3a8b0c76e6b7bf0e72141047f82eb2c3f4862c8d
   CACHE STRING
   "Pinned libwebrtc Git revision"
 )
