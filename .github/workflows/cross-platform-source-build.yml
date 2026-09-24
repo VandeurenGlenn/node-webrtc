@@ -347,7 +347,8 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          # The pinned WPT snapshot still imports collections.MutableMapping.
+          python-version: '3.9'
 
       - name: Initialize Web Platform Tests
         if: runner.os == 'Linux'
