@@ -31,7 +31,12 @@ module.exports = ({ toUpstream = false } = {}) => {
   return dns.lookup('web-platform.test').then(
     () => {
       const configArg = path.relative(path.resolve(wptDir), configPath);
-      const args = ['./wpt.py', 'serve', '--config', configArg];
+      const bootstrap = [
+        'from tools import localpaths',
+        'from tools.serve.serve import main',
+        'main()'
+      ].join('; ');
+      const args = ['-c', bootstrap, '--config', configArg];
       const python = childProcess.spawn('python', args, {
         cwd: wptDir,
         stdio: 'inherit'
@@ -39,7 +44,7 @@ module.exports = ({ toUpstream = false } = {}) => {
 
       return new Promise((resolve, reject) => {
         python.on('error', e => {
-          reject(new Error('Error starting python server process:', e.message));
+          reject(new Error(`Error starting python server process: ${e.message}`));
         });
 
         resolve(pollForServer(urlPrefix));

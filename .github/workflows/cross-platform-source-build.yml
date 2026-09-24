@@ -380,7 +380,7 @@ jobs:
         continue-on-error: true
         working-directory: test/web-platform-tests/tests
         run: |
-          ./wpt make-hosts-file | sudo tee -a /etc/hosts > /dev/null
+          node "$GITHUB_WORKSPACE/scripts/generate-wpt-hosts.js" | sudo tee -a /etc/hosts > /dev/null
           getent hosts web-platform.test
 
       - name: Run Web Platform Tests
