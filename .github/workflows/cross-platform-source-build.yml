@@ -233,10 +233,20 @@ jobs:
           ARTIFACT_NAME: ${{ steps.prebuilt.outputs.name }}
           ARTIFACT_RUN_ID: ${{ steps.prebuilt.outputs.run-id }}
         run: |
-          gh run download "$ARTIFACT_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name "$ARTIFACT_NAME" \
-            --dir build/external/libwebrtc
+          for attempt in 1 2 3; do
+            rm -rf build/external/libwebrtc
+            if gh run download "$ARTIFACT_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$ARTIFACT_NAME" \
+              --dir build/external/libwebrtc; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Artifact download failed; retrying (attempt $((attempt + 1))/3)"
+            sleep "$((attempt * 10))"
+          done
 
       - name: Prepare WebRTC prebuilt layout
         if: steps.prebuilt.outputs.run-id != ''
@@ -282,10 +292,20 @@ jobs:
           ARTIFACT_NAME: ${{ steps.native-addon.outputs.name }}
           ARTIFACT_RUN_ID: ${{ steps.native-addon.outputs.run-id }}
         run: |
-          gh run download "$ARTIFACT_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name "$ARTIFACT_NAME" \
-            --dir reused-native-addon
+          for attempt in 1 2 3; do
+            rm -rf reused-native-addon
+            if gh run download "$ARTIFACT_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name "$ARTIFACT_NAME" \
+              --dir reused-native-addon; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "Artifact download failed; retrying (attempt $((attempt + 1))/3)"
+            sleep "$((attempt * 10))"
+          done
           mkdir -p build
           addon_archive="$(find reused-native-addon -type f -name '*.tar.gz' -print -quit)"
           if [ -z "$addon_archive" ]; then
@@ -365,7 +385,7 @@ jobs:
 
       - name: Run Web Platform Tests
         id: wpt
-        if: runner.os == 'Linux' && steps.wpt-hosts.outcome == 'success'
+        if: always() && runner.os == 'Linux' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
         run: npm run wpt:test
 
