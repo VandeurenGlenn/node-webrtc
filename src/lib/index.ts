@@ -53,8 +53,11 @@ RTCDataChannel.prototype.send = function send(data) {
     const implSymbol = Object.getOwnPropertySymbols(data).find(
       (symbol) => symbol.toString() === "Symbol(impl)",
     );
-    if (implSymbol && data[implSymbol] && data[implSymbol]._buffer) {
-      data = data[implSymbol]._buffer;
+    if (implSymbol && data[implSymbol]) {
+      // jsdom <= 29 stored Blob data in _buffer; jsdom 30 uses _bytes.
+      // Both are byte views, so extracting them synchronously also preserves the
+      // ordering required when a Blob is followed immediately by another send.
+      data = data[implSymbol]._bytes || data[implSymbol]._buffer || data;
     }
   }
   this._send(data);
