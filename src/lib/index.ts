@@ -42,6 +42,37 @@ inherits(RTCVideoSink, EventTarget);
 
 setDOMException(globalThis.DOMException);
 
+const dataChannelSendQueues = new WeakMap();
+
+function enqueueDataChannelSend(channel, task) {
+  const previous = dataChannelSendQueues.get(channel) || Promise.resolve();
+  const next = previous.then(task);
+  dataChannelSendQueues.set(channel, next);
+  next.then(
+    () => {
+      if (dataChannelSendQueues.get(channel) === next) {
+        dataChannelSendQueues.delete(channel);
+      }
+    },
+    (error) => {
+      if (dataChannelSendQueues.get(channel) === next) {
+        dataChannelSendQueues.delete(channel);
+      }
+      if (typeof channel.dispatchEvent === "function") {
+        channel.dispatchEvent({ type: "error", error });
+      }
+    },
+  );
+}
+
+function sendDataChannelValue(channel, data) {
+  if (dataChannelSendQueues.has(channel)) {
+    enqueueDataChannelSend(channel, () => channel._send(data));
+  } else {
+    channel._send(data);
+  }
+}
+
 // NOTE(mroberts): Here's a hack to support jsdom's Blob implementation.
 RTCDataChannel.prototype.send = function send(data) {
   if (data !== null && typeof data === "object") {
@@ -55,35 +86,49 @@ RTCDataChannel.prototype.send = function send(data) {
           data.byteLength,
         ).slice();
       }
-      this._send(data);
+      sendDataChannelValue(this, data);
       return;
     }
 
     if (data instanceof ArrayBuffer) {
-      this._send(data);
+      sendDataChannelValue(this, data);
       return;
     }
 
     if (Object.prototype.toString.call(data) === "[object ArrayBuffer]") {
-      this._send(new Uint8Array(data));
+      sendDataChannelValue(this, new Uint8Array(data));
       return;
     }
 
-    const implSymbol = Object.getOwnPropertySymbols(data).find(
-      (symbol) => symbol.toString() === "Symbol(impl)",
-    );
-    if (implSymbol && data[implSymbol]) {
+    const implementation = Object.getOwnPropertySymbols(data)
+      .map((symbol) => data[symbol])
+      .find(
+        (value) => value && (value._bytes || value._buffer),
+      );
+    if (implementation) {
       // jsdom <= 29 stored Blob data in _buffer; jsdom 30 uses _bytes.
       // Both are byte views, so extracting them synchronously also preserves the
       // ordering required when a Blob is followed immediately by another send.
-      const bytes = data[implSymbol]._bytes || data[implSymbol]._buffer;
-      if (bytes) {
-        this._send(Uint8Array.from(bytes));
+      const bytes = implementation._bytes || implementation._buffer;
+      sendDataChannelValue(this, Uint8Array.from(bytes));
+      return;
+    }
+
+    if (typeof data.arrayBuffer === "function") {
+      // Blob exposes its bytes asynchronously. Queue subsequent sends behind
+      // the conversion to preserve the synchronous call order required by WPT.
+      if (this.readyState !== "open") {
+        this._send(data);
         return;
       }
+      enqueueDataChannelSend(this, async () => {
+        const buffer = await data.arrayBuffer();
+        this._send(new Uint8Array(buffer));
+      });
+      return;
     }
   }
-  this._send(data);
+  sendDataChannelValue(this, data);
 };
 
 const mediaDevices = new MediaDevices();
