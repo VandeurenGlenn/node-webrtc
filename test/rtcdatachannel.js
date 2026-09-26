@@ -1,7 +1,30 @@
 'use strict';
 
 const tape = require('./lib/test');
-const { RTCPeerConnection } = require('..');
+const { JSDOM } = require('jsdom');
+const { RTCDataChannel, RTCPeerConnection } = require('..');
+
+tape('.send() normalizes jsdom Blob and cross-realm ArrayBuffer values', t => {
+  const { window } = new JSDOM('', { runScripts: 'dangerously' });
+  const values = window.eval(`[
+    new Blob(['blob']),
+    new ArrayBuffer(8)
+  ]`);
+  const sent = [];
+  const channel = {
+    _send(value) {
+      sent.push(value);
+    }
+  };
+
+  values.forEach(value => RTCDataChannel.prototype.send.call(channel, value));
+
+  t.equal(Buffer.from(sent[0]).toString(), 'blob', 'Blob bytes are preserved');
+  t.equal(sent[1].byteLength, 8, 'ArrayBuffer length is preserved');
+  t.ok(sent.every(value => value instanceof Uint8Array), 'values use the Node realm');
+  window.close();
+  t.end();
+});
 
 tape('Calling .send(message) when .readyState is "closed" throws InvalidStateError', t => {
   const pc = new RTCPeerConnection();
