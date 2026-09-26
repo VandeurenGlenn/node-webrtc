@@ -83,6 +83,7 @@ async function testDtlsTransport(t, createSenderOrReceiver) {
   const remoteCertificates = transport.getRemoteCertificates();
   t.ok(remoteCertificates.length > 0, 'getRemoteCertificates() returns at least one remote certificate');
   remoteCertificates.forEach((derBuffer, i) => {
+    t.ok(derBuffer instanceof ArrayBuffer, `remote certificate ${i + 1} is an ArrayBuffer`);
     // NOTE(mroberts): https://stackoverflow.com/a/48309802
     const prefix = '-----BEGIN CERTIFICATE-----\n';
     const postfix = '-----END CERTIFICATE-----';

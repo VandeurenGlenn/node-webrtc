@@ -80,6 +80,11 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
       // NOTE(mroberts): Here is where we inject node-webrtc.
       Object.assign(window, wrtc);
 
+      // node-webrtc values are created in Node's realm. Use its ArrayBuffer
+      // constructor in this synthetic browser realm so Web IDL instanceof
+      // checks reflect the API's actual return type instead of a realm mismatch.
+      window.ArrayBuffer = global.ArrayBuffer;
+
       window.navigator.mediaDevices = Object.assign({}, window.navigator.mediaDevices, {
         getUserMedia: wrtc.getUserMedia
       });

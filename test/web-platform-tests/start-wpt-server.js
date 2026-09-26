@@ -31,25 +31,33 @@ module.exports = ({ toUpstream = false } = {}) => {
   return dns.lookup('web-platform.test').then(
     () => {
       const configArg = path.relative(path.resolve(wptDir), configPath);
-      const args = ['./wpt.py', 'serve', '--config', configArg];
+      const bootstrap = [
+        'from tools import localpaths',
+        'from tools.serve.serve import main',
+        'main()'
+      ].join('; ');
+      const args = ['-c', bootstrap, '--config', configArg];
       const python = childProcess.spawn('python', args, {
         cwd: wptDir,
         stdio: 'inherit'
       });
 
-      return new Promise((resolve, reject) => {
-        python.on('error', e => {
-          reject(new Error('Error starting python server process:', e.message));
+      const serverExited = new Promise((resolve, reject) => {
+        python.once('error', e => {
+          reject(new Error(`Error starting python server process: ${e.message}`));
         });
-
-        resolve(pollForServer(urlPrefix));
-
-        process.on('exit', () => {
-          // Python doesn't register a default handler for SIGTERM and it doesn't run __exit__() methods of context
-          // managers when it gets that signal. Using SIGINT avoids this problem.
-          python.kill('SIGINT');
+        python.once('exit', (code, signal) => {
+          reject(new Error(`WPT server exited before startup (code ${code}, signal ${signal})`));
         });
       });
+
+      process.on('exit', () => {
+        // Python doesn't register a default handler for SIGTERM and it doesn't run __exit__() methods of context
+        // managers when it gets that signal. Using SIGINT avoids this problem.
+        python.kill('SIGINT');
+      });
+
+      return Promise.race([pollForServer(urlPrefix), serverExited]);
     },
     () => {
       throw new Error('Host entries not present for web platform tests. See ' +
