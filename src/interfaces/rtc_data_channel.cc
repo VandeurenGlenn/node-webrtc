@@ -23,6 +23,19 @@
 
 namespace node_webrtc {
 
+namespace {
+
+// Repeated hosted-runner measurements show that keeping the libuv wake-up
+// path unbatched is faster on Intel macOS. Other supported targets benefit
+// substantially from coalescing bursts of DataChannel messages.
+#if defined(__APPLE__) && defined(__x86_64__)
+constexpr bool kCoalesceDataChannelEvents = false;
+#else
+constexpr bool kCoalesceDataChannelEvents = true;
+#endif
+
+}  // namespace
+
 Napi::FunctionReference& RTCDataChannel::constructor() {
   static Napi::FunctionReference constructor;
   return constructor;
@@ -63,7 +76,7 @@ static void requeue(DataChannelObserver& observer, RTCDataChannel& channel) {
 }
 
 RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
-  : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info, true)
+  : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info, kCoalesceDataChannelEvents)
   , _binaryType(BinaryType::kArrayBuffer)
   , _state(webrtc::DataChannelInterface::DataState::kConnecting)
   , _asyncSendState(std::make_shared<AsyncSendState>(this)) {
