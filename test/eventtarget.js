@@ -29,3 +29,16 @@ test('EventTarget honors listener removal before asynchronous delivery', async t
   t.deepEqual(calls, []);
   t.end();
 });
+
+test('EventTarget delivers events already scheduled by native code synchronously', async t => {
+  const { default: EventTarget } = await import('../lib/eventtarget.js');
+  const target = new EventTarget();
+  const calls = [];
+
+  target.addEventListener('message', event => calls.push(event.data));
+  target._dispatchEvent({ type: 'message', data: 'native' });
+  calls.push('after');
+
+  t.deepEqual(calls, ['native', 'after']);
+  t.end();
+});

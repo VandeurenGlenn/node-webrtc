@@ -208,7 +208,7 @@ void RTCDataChannel::HandleMessage(RTCDataChannel& channel, const webrtc::DataBu
   auto object = Napi::Object::New(env);
   object.Set("type", "message");
   object.Set("data", value);
-  channel.MakeCallback("dispatchEvent", { object });
+  channel.MakeCallback("_dispatchEvent", { object });
 }
 
 void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuffer* rawBuffer) {
@@ -243,7 +243,7 @@ void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuf
   auto object = Napi::Object::New(env);
   object.Set("type", "message");
   object.Set("data", value);
-  channel.MakeCallback("dispatchEvent", { object });
+  channel.MakeCallback("_dispatchEvent", { object });
 }
 
 void RTCDataChannel::SendAsync(webrtc::DataBuffer buffer) {
