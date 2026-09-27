@@ -28,9 +28,8 @@ class EventQueue {
    * @param event the event to enqueue
    */
   void Enqueue(std::unique_ptr<Event<T>> event) {
-    _mutex.lock();
+    std::lock_guard<std::mutex> lock(_mutex);
     _events.push(std::move(event));
-    _mutex.unlock();
   }
 
   /**
@@ -39,15 +38,18 @@ class EventQueue {
    * @return the dequeued Event or nullptr
    */
   std::unique_ptr<Event<T>> Dequeue() {
-    _mutex.lock();
+    std::lock_guard<std::mutex> lock(_mutex);
     if (_events.empty()) {
-      _mutex.unlock();
       return nullptr;
     }
     auto event = std::move(_events.front());
     _events.pop();
-    _mutex.unlock();
     return event;
+  }
+
+  bool IsEmpty() {
+    std::lock_guard<std::mutex> lock(_mutex);
+    return _events.empty();
   }
 
  private:
