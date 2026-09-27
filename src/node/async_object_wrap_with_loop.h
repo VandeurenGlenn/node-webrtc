@@ -18,9 +18,10 @@ class AsyncObjectWrapWithLoop
   AsyncObjectWrapWithLoop(
       const char* name,
       T& target,
-      const Napi::CallbackInfo& info) :
+      const Napi::CallbackInfo& info,
+      bool coalesceEvents = false) :
     AsyncObjectWrap<T>(name, info),
-    EventLoop<T>(info.Env(), this->context(), target) {
+    EventLoop<T>(info.Env(), this->context(), target, coalesceEvents) {
     this->Ref();
   }
 

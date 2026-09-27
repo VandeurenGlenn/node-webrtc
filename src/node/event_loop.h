@@ -18,11 +18,12 @@ class EventLoop: private EventQueue<T> {
 
   void Dispatch(std::unique_ptr<Event<T>> event) {
     this->Enqueue(std::move(event));
-    if (!_async_pending.exchange(true, std::memory_order_acq_rel)) {
-      std::lock_guard<std::mutex> lock(_lock);
-      if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&_async))) {
-        uv_async_send(&_async);
-      }
+    if (_coalesce_events && _async_pending.exchange(true, std::memory_order_acq_rel)) {
+      return;
+    }
+    std::lock_guard<std::mutex> lock(_lock);
+    if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&_async))) {
+      uv_async_send(&_async);
     }
   }
 
@@ -31,7 +32,8 @@ class EventLoop: private EventQueue<T> {
   }
 
  protected:
-  EventLoop(Napi::Env env, Napi::AsyncContext* context, T& target): _context(context), _env(env), _target(target) {
+  EventLoop(Napi::Env env, Napi::AsyncContext* context, T& target, bool coalesceEvents = false)
+    : _coalesce_events(coalesceEvents), _context(context), _env(env), _target(target) {
     uv_loop_t* loop;
     auto status = napi_get_uv_event_loop(_env, &loop);
     {
@@ -66,6 +68,10 @@ class EventLoop: private EventQueue<T> {
         break;
       }
 
+      if (!_coalesce_events) {
+        return;
+      }
+
       // Producers skip uv_async_send while a drain is pending. Clear the flag
       // only after draining, then reclaim it if an event arrived just before
       // the clear. An event arriving afterwards observes false and schedules
@@ -97,6 +103,7 @@ class EventLoop: private EventQueue<T> {
  private:
   uv_async_t _async{};
   std::atomic<bool> _async_pending = {false};
+  const bool _coalesce_events;
   Napi::AsyncContext* _context;
   Napi::Env _env;
   std::mutex _lock{};

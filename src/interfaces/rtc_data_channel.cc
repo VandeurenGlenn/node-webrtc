@@ -63,7 +63,7 @@ static void requeue(DataChannelObserver& observer, RTCDataChannel& channel) {
 }
 
 RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
-  : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info)
+  : AsyncObjectWrapWithLoop<RTCDataChannel>("RTCDataChannel", *this, info, true)
   , _binaryType(BinaryType::kArrayBuffer)
   , _state(webrtc::DataChannelInterface::DataState::kConnecting)
   , _asyncSendState(std::make_shared<AsyncSendState>(this)) {
