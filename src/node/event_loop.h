@@ -18,11 +18,12 @@ class EventLoop: private EventQueue<T> {
 
   void Dispatch(std::unique_ptr<Event<T>> event) {
     this->Enqueue(std::move(event));
-    _lock.lock();
-    if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&_async))) {
-      uv_async_send(&_async);
+    if (!_async_pending.exchange(true, std::memory_order_acq_rel)) {
+      std::lock_guard<std::mutex> lock(_lock);
+      if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&_async))) {
+        uv_async_send(&_async);
+      }
     }
-    _lock.unlock();
   }
 
   bool should_stop() const {
@@ -52,7 +53,7 @@ class EventLoop: private EventQueue<T> {
 
   virtual void Run() {
     Napi::HandleScope scope(_env);
-    if (!_should_stop) {
+    while (!_should_stop) {
       while (auto event = this->Dequeue()) {
         Napi::CallbackScope callbackScope(_env, *_context);
         event->Dispatch(_target);
@@ -60,14 +61,31 @@ class EventLoop: private EventQueue<T> {
           break;
         }
       }
+
+      if (_should_stop) {
+        break;
+      }
+
+      // Producers skip uv_async_send while a drain is pending. Clear the flag
+      // only after draining, then reclaim it if an event arrived just before
+      // the clear. An event arriving afterwards observes false and schedules
+      // its own wake-up, so neither side of the race can strand queued work.
+      _async_pending.store(false, std::memory_order_release);
+      if (this->IsEmpty()) {
+        return;
+      }
+      bool expected = false;
+      if (!_async_pending.compare_exchange_strong(
+              expected, true, std::memory_order_acq_rel)) {
+        return;
+      }
     }
     if (_should_stop) {
-      _lock.lock();
+      std::lock_guard<std::mutex> lock(_lock);
       uv_close(reinterpret_cast<uv_handle_t*>(&_async), [](auto handle) {
         auto self = static_cast<EventLoop<T>*>(handle->data);
         self->DidStop();
       });
-      _lock.unlock();
     }
   }
 
@@ -78,6 +96,7 @@ class EventLoop: private EventQueue<T> {
 
  private:
   uv_async_t _async{};
+  std::atomic<bool> _async_pending = {false};
   Napi::AsyncContext* _context;
   Napi::Env _env;
   std::mutex _lock{};
