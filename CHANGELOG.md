@@ -12,6 +12,12 @@ Bug Fixes
 
 - Make release publication idempotent for platform packages after a partial
   registry failure.
+- Run the pinned Web Platform Tests reliably on current CI runners with Python
+  3.9 compatibility patches and deterministic host configuration.
+- Normalize cross-realm `Blob`, `ArrayBuffer`, and typed-array DataChannel
+  payloads while preserving send order.
+- Reuse verified WebRTC and native-addon artifacts across pull requests,
+  merges, benchmarks, and releases without unnecessary rebuilds.
 
 0.7.0
 =====
