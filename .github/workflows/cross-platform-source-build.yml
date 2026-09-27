@@ -1045,7 +1045,7 @@ jobs:
               --title "@vandeurenglenn/wrtc $GITHUB_REF_NAME"
           fi
 
-      - name: Verify the published install path
+      - name: Verify the packaged install path
         shell: bash
         run: |
           package_archive="$(find "$RUNNER_TEMP/release-package" -type f -name '*.tgz' -print -quit)"
@@ -1064,3 +1064,6 @@ jobs:
 
       - name: Publish package to npm with provenance
         run: node scripts/publish-to-npm.js --provenance
+
+      - name: Verify the public npm release
+        run: node scripts/verify-npm-release.js
