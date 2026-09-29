@@ -3,6 +3,7 @@
 // const semver = require('semver');
 
 require("./addicecandidate");
+require("./benchmark-report");
 require("./closing-data-channel");
 require("./closing-peer-connection");
 require("./connect");
