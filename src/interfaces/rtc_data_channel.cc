@@ -34,6 +34,14 @@ constexpr bool kCoalesceDataChannelEvents = false;
 constexpr bool kCoalesceDataChannelEvents = true;
 #endif
 
+// Skipping the extra nextTick materially improves Windows throughput, while
+// repeated cross-platform benchmarks show regressions on macOS and Linux.
+#if defined(_WIN32)
+constexpr const char* kMessageDispatchMethod = "_dispatchEvent";
+#else
+constexpr const char* kMessageDispatchMethod = "dispatchEvent";
+#endif
+
 }  // namespace
 
 Napi::FunctionReference& RTCDataChannel::constructor() {
@@ -208,7 +216,7 @@ void RTCDataChannel::HandleMessage(RTCDataChannel& channel, const webrtc::DataBu
   auto object = Napi::Object::New(env);
   object.Set("type", "message");
   object.Set("data", value);
-  channel.MakeCallback("_dispatchEvent", { object });
+  channel.MakeCallback(kMessageDispatchMethod, { object });
 }
 
 void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuffer* rawBuffer) {
@@ -243,7 +251,7 @@ void RTCDataChannel::HandleOwnedMessage(RTCDataChannel& channel, webrtc::DataBuf
   auto object = Napi::Object::New(env);
   object.Set("type", "message");
   object.Set("data", value);
-  channel.MakeCallback("_dispatchEvent", { object });
+  channel.MakeCallback(kMessageDispatchMethod, { object });
 }
 
 void RTCDataChannel::SendAsync(webrtc::DataBuffer buffer) {
