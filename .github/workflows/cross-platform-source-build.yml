@@ -23,6 +23,77 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify changes
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    outputs:
+      source_build: ${{ steps.classify.outputs.source_build }}
+      native: ${{ steps.classify.outputs.native }}
+      performance: ${{ steps.classify.outputs.performance }}
+      wpt: ${{ steps.classify.outputs.wpt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          source_build=false
+          native=false
+          performance=false
+          wpt=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              CMakeLists.txt|cmake/*|src/*.cc|src/*.h|scripts/build-from-source.js|scripts/clean-package-build.js|scripts/configure-webrtc.*|scripts/download-webrtc.*|scripts/build-webrtc.*|scripts/patch-webrtc-*|scripts/prepare-webrtc-prebuilt.js|scripts/stage-webrtc-prebuilt.js)
+                source_build=true
+                native=true
+                performance=true
+                wpt=true
+                ;;
+              package.json|package-lock.json|rollup.config.js|src/lib/*|lib/*)
+                source_build=true
+                performance=true
+                wpt=true
+                ;;
+              benchmarks/run.js|benchmarks/run-paired.js|benchmarks/unsupported-result.js)
+                source_build=true
+                performance=true
+                ;;
+              test/web-platform-tests/*|scripts/generate-wpt-hosts.js|scripts/patch-wpt-python3.js|scripts/reset-wpt.js|scripts/summarize-wpt.js)
+                source_build=true
+                wpt=true
+                ;;
+              test/benchmark-report.js|scripts/render-benchmark-report.js|README.md|docs/*)
+                ;;
+              .github/workflows/cross-platform-source-build.yml)
+                # Workflow changes get one complete validation run.
+                source_build=true
+                native=true
+                performance=true
+                wpt=true
+                ;;
+              *)
+                # Unknown code or configuration is validated conservatively.
+                source_build=true
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+
+          echo "source_build=$source_build" >> "$GITHUB_OUTPUT"
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+          echo "performance=$performance" >> "$GITHUB_OUTPUT"
+          echo "wpt=$wpt" >> "$GITHUB_OUTPUT"
+          printf 'source-build=%s\nnative=%s\nperformance=%s\nwpt=%s\n' \
+            "$source_build" "$native" "$performance" "$wpt"
+
   tooling:
     name: Lint and dependency audit
     if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
@@ -48,6 +119,11 @@ jobs:
       - name: Verify generated library is current
         run: git diff --exit-code -- lib
 
+      - name: Run tooling tests
+        run: |
+          node --test test/benchmark-report.js
+          node scripts/summarize-wpt.js "$RUNNER_TEMP/wpt-summary.json"
+
       - name: Audit dependencies
         shell: bash
         run: |
@@ -70,7 +146,8 @@ jobs:
 
   source-build:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
-    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.source_build == 'true' }}
+    needs: changes
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout_minutes || 60 }}
     strategy:
@@ -364,21 +441,21 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Setup Web Platform Test Python
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
         uses: actions/setup-python@v6
         with:
           # The pinned WPT snapshot still imports collections.MutableMapping.
           python-version: '3.9'
 
       - name: Initialize Web Platform Tests
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
         run: |
           npm run wpt:init
           node scripts/patch-wpt-python3.js
 
       - name: Configure Web Platform Test hosts
         id: wpt-hosts
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
         continue-on-error: true
         working-directory: test/web-platform-tests/tests
         run: |
@@ -387,49 +464,69 @@ jobs:
 
       - name: Run Web Platform Tests
         id: wpt
-        if: always() && runner.os == 'Linux' && steps.wpt-hosts.outcome == 'success'
+        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
         run: npm run wpt:test
 
       - name: Generate WPT badge status
-        if: always() && runner.os == 'Linux'
+        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
         shell: bash
         env:
           WPT_HOSTS_OUTCOME: ${{ steps.wpt-hosts.outcome }}
           WPT_OUTCOME: ${{ steps.wpt.outcome }}
         run: |
           mkdir -p wpt-status
+          node scripts/summarize-wpt.js wpt-status/wpt-summary.json
           if [ "$WPT_HOSTS_OUTCOME" != "success" ]; then
-            message="setup error"
+            status="setup error"
             color=orange
           elif [ "$WPT_OUTCOME" = "success" ]; then
-            message=passing
+            status=passing
             color=brightgreen
           else
-            message=failing
+            status=failing
             color=red
           fi
-          node -e 'const fs=require("fs"); fs.writeFileSync("wpt-status/wpt-badge.json", JSON.stringify({schemaVersion:1,label:"WPT",message:process.argv[1],color:process.argv[2]}) + "\n")' "$message" "$color"
+          node -e '
+            const fs = require("fs");
+            const summary = require("./wpt-status/wpt-summary.json");
+            const status = process.argv[1];
+            const message = status === "passing"
+              ? `${summary.expectedPass} pass · ${summary.expectedFail} xfail · ${summary.skipped} skip`
+              : `${status} · ${summary.expectedFail} xfail · ${summary.skipped} skip`;
+            fs.writeFileSync("wpt-status/wpt-badge.json", JSON.stringify({
+              schemaVersion: 1,
+              label: "WPT",
+              message,
+              color: process.argv[2],
+            }) + "\n");
+          ' "$status" "$color"
+          node -e '
+            const summary = require("./wpt-status/wpt-summary.json");
+            console.log(`### WPT plan\n\n- Expected pass: ${summary.expectedPass}\n- Expected fail: ${summary.expectedFail}\n- Skipped: ${summary.skipped}`);
+          ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve WPT badge status
-        if: always() && runner.os == 'Linux'
+        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: wpt-status
-          path: wpt-status/wpt-badge.json
+          path: wpt-status/
           if-no-files-found: error
           retention-days: 90
 
       - name: Benchmark smoke
+        if: needs.changes.outputs.performance == 'true'
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
 
       - name: Find benchmark baseline
         id: benchmark-baseline
-        if: github.event_name == 'pull_request'
+        if: needs.changes.outputs.performance == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           BENCHMARK_ARTIFACT: benchmark-${{ runner.os }}-${{ runner.arch }}
+          NATIVE_ARTIFACT: wrtc-${{ runner.os }}-${{ runner.arch }}
           PRODUCER_JOB: ${{ matrix.os }} / node ${{ matrix.node }}
         run: |
           mkdir -p benchmarks/ci-baseline
@@ -460,6 +557,20 @@ jobs:
               baseline_file="$(find benchmarks/ci-baseline -type f -name '*.json' | head -n 1)"
               if [ -n "$baseline_file" ]; then
                 echo "path=$baseline_file" >> "$GITHUB_OUTPUT"
+                mkdir -p benchmarks/ci-baseline-addon/archive benchmarks/ci-baseline-addon/extracted
+                if gh run download "$run_id" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --name "$NATIVE_ARTIFACT" \
+                  --dir benchmarks/ci-baseline-addon/archive 2>/dev/null; then
+                  addon_archive="$(find benchmarks/ci-baseline-addon/archive -type f -name '*.tar.gz' | head -n 1)"
+                  if [ -n "$addon_archive" ]; then
+                    tar -xzf "$addon_archive" -C benchmarks/ci-baseline-addon/extracted
+                    baseline_addon="$(find benchmarks/ci-baseline-addon/extracted -type f -name 'wrtc.node' | head -n 1)"
+                    if [ -n "$baseline_addon" ]; then
+                      echo "addon=$baseline_addon" >> "$GITHUB_OUTPUT"
+                    fi
+                  fi
+                fi
                 echo "Using benchmark baseline from merged PR run $run_id"
                 exit 0
               fi
@@ -476,11 +587,25 @@ jobs:
           echo "No platform baseline found; this run will establish one"
 
       - name: Run stable benchmarks
+        if: needs.changes.outputs.performance == 'true'
         shell: bash
         env:
           BASELINE_PATH: ${{ steps.benchmark-baseline.outputs.path }}
+          BASELINE_ADDON: ${{ steps.benchmark-baseline.outputs.addon }}
           BENCHMARK_OUTPUT: benchmarks/results/${{ runner.os }}-${{ runner.arch }}.json
+          PAIR_BENCHMARKS: ${{ matrix.os != 'macos-15-intel' }}
         run: |
+          if [ "$PAIR_BENCHMARKS" = "true" ] && [ -n "$BASELINE_ADDON" ]; then
+            node benchmarks/run-paired.js \
+              --baseline-addon "$BASELINE_ADDON" \
+              --candidate-addon build/Release/wrtc.node \
+              --pairs 3 \
+              --iterations 5 \
+              --warmup 1 \
+              --messages 10 \
+              --output "$BENCHMARK_OUTPUT"
+            exit 0
+          fi
           baseline_args=()
           if [ -n "$BASELINE_PATH" ]; then
             baseline_args=(--baseline "$BASELINE_PATH")
@@ -494,6 +619,7 @@ jobs:
             "${baseline_args[@]}"
 
       - name: Preserve benchmark result
+        if: needs.changes.outputs.performance == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: benchmark-${{ runner.os }}-${{ runner.arch }}
@@ -521,10 +647,10 @@ jobs:
 
   native-sanitizers:
     name: Linux native sanitizers
-    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
-    needs: source-build
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.native == 'true' }}
+    needs: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -540,6 +666,7 @@ jobs:
           sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
 
       - name: Download matching WebRTC prebuilt
+        id: sanitizer-prebuilt
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -551,21 +678,25 @@ jobs:
               --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
           )"
           if [ -z "$run_id" ]; then
-            echo "No matching Linux WebRTC prebuilt found" >&2
-            exit 1
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No matching Linux WebRTC prebuilt found; using the full correctness build path"
+            exit 0
           fi
           gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir build/external/libwebrtc
+          echo "found=true" >> "$GITHUB_OUTPUT"
 
       - name: Prepare dependencies
         run: |
-          node scripts/prepare-webrtc-prebuilt.js
+          if [ "${{ steps.sanitizer-prebuilt.outputs.found }}" = "true" ]; then
+            node scripts/prepare-webrtc-prebuilt.js
+          fi
           npm install --ignore-scripts
 
       - name: Build addon with sanitizers
         env:
           CMAKE_GENERATOR: Ninja
-          SKIP_DOWNLOAD: true
-          WEBRTC_PREBUILT: 1
+          SKIP_DOWNLOAD: ${{ steps.sanitizer-prebuilt.outputs.found == 'true' && 'true' || 'false' }}
+          WEBRTC_PREBUILT: ${{ steps.sanitizer-prebuilt.outputs.found == 'true' && '1' || '0' }}
           WRTC_ENABLE_SANITIZERS: 1
         run: npm run build
 
@@ -579,8 +710,10 @@ jobs:
 
   linux-performance-profile:
     name: Linux DataChannel performance profile
-    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
-    needs: source-build
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.performance == 'true' }}
+    needs:
+      - changes
+      - source-build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -645,8 +778,10 @@ jobs:
 
   implementation-benchmarks:
     name: Compare Node WebRTC implementations
-    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
-    needs: source-build
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.performance == 'true' }}
+    needs:
+      - changes
+      - source-build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -762,8 +897,9 @@ jobs:
 
   benchmark-report:
     name: Visual benchmark report
-    if: ${{ github.event_name != 'push' && !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.performance == 'true' }}
     needs:
+      - changes
       - source-build
       - implementation-benchmarks
     runs-on: ubuntu-latest
@@ -778,10 +914,39 @@ jobs:
           path: benchmark-artifacts
 
       - name: Download WPT badge status
+        if: needs.changes.outputs.wpt == 'true'
         uses: actions/download-artifact@v7
         with:
           name: wpt-status
           path: wpt-status
+
+      - name: Reuse latest WPT badge status
+        if: needs.changes.outputs.wpt != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=wpt-status&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+          )"
+          if [ -z "$run_id" ]; then
+            echo "No reusable WPT status artifact found" >&2
+            exit 1
+          fi
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name wpt-status \
+            --dir wpt-status
+
+      - name: Preserve reused WPT badge status
+        if: needs.changes.outputs.wpt != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: wpt-status
+          path: wpt-status/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Download benchmark history
         shell: bash
@@ -823,8 +988,9 @@ jobs:
 
       - name: Render benchmark report
         run: |
-          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history wpt-status/wpt-summary.json
           cp wpt-status/wpt-badge.json benchmark-report/wpt-badge.json
+          cp wpt-status/wpt-summary.json benchmark-report/wpt-summary.json
 
       - name: Add report to workflow summary
         run: cat benchmark-report/summary.md >> "$GITHUB_STEP_SUMMARY"
@@ -870,6 +1036,7 @@ jobs:
             src
             lib
             benchmarks/run.js
+            benchmarks/run-paired.js
             benchmarks/unsupported-result.js
             package.json
             package-lock.json
@@ -984,8 +1151,9 @@ jobs:
 
       - name: Render benchmark dashboard
         run: |
-          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history
+          node scripts/render-benchmark-report.js benchmark-artifacts benchmark-report benchmark-history wpt-status/wpt-summary.json
           cp wpt-status/wpt-badge.json benchmark-report/wpt-badge.json
+          cp wpt-status/wpt-summary.json benchmark-report/wpt-summary.json
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
