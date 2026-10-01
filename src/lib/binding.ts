@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const nativePackages: Record<string, string> = {
   "darwin-arm64": "@vandeurenglenn/wrtc-darwin-arm64",
   "darwin-x64": "@vandeurenglenn/wrtc-darwin-x64",
+  "linux-arm64": "@vandeurenglenn/wrtc-linux-arm64",
   "linux-x64": "@vandeurenglenn/wrtc-linux-x64",
   "win32-x64": "@vandeurenglenn/wrtc-win32-x64",
 };

@@ -165,6 +165,16 @@ jobs:
         include:
           - os: ubuntu-latest
             node: 26
+            run_wpt: true
+            generator: Ninja
+            webrtc_config: cmake/webrtc-linux.cmake
+            script_suffix: sh
+            platform_patch_1: cmake/webrtc-linux.cmake
+            platform_patch_2: cmake/webrtc-linux.cmake
+            legacy_artifact: ""
+          - os: ubuntu-24.04-arm
+            node: 26
+            run_wpt: false
             generator: Ninja
             webrtc_config: cmake/webrtc-linux.cmake
             script_suffix: sh
@@ -450,21 +460,21 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Setup Web Platform Test Python
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         uses: actions/setup-python@v6
         with:
           # The pinned WPT snapshot still imports collections.MutableMapping.
           python-version: '3.9'
 
       - name: Initialize Web Platform Tests
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         run: |
           npm run wpt:init
           node scripts/patch-wpt-python3.js
 
       - name: Configure Web Platform Test hosts
         id: wpt-hosts
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         continue-on-error: true
         working-directory: test/web-platform-tests/tests
         run: |
@@ -473,12 +483,12 @@ jobs:
 
       - name: Run Web Platform Tests
         id: wpt
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
         run: npm run wpt:test
 
       - name: Generate WPT badge status
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         shell: bash
         env:
           WPT_HOSTS_OUTCOME: ${{ steps.wpt-hosts.outcome }}
@@ -516,7 +526,7 @@ jobs:
           ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve WPT badge status
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: wpt-status
@@ -1076,6 +1086,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (
                   .name == "benchmark-Linux-X64" or
+                  .name == "benchmark-Linux-ARM64" or
                   .name == "benchmark-Windows-X64" or
                   .name == "benchmark-macOS-X64" or
                   .name == "benchmark-macOS-ARM64" or
@@ -1083,7 +1094,9 @@ jobs:
                   .name == "wpt-status"
                 ))] | length'
             )"
-            if [ "$artifact_count" -eq 6 ]; then
+            expected_artifacts="$(node --input-type=module -e \
+              'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length + 2)')"
+            if [ "$artifact_count" -eq "$expected_artifacts" ]; then
               benchmark_run_id="$run_id"
               break
             fi
@@ -1197,6 +1210,8 @@ jobs:
         run: |
           tag_tree="$(git rev-parse 'HEAD^{tree}')"
           build_run_id=""
+          expected_platforms="$(node --input-type=module -e \
+            'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length)')"
 
           while IFS=$'\t' read -r run_id head_sha; do
             candidate_tree="$(
@@ -1209,9 +1224,9 @@ jobs:
 
             successful_build_jobs="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
-                --jq '[.jobs[] | select(.conclusion == "success" and (.name == "ubuntu-latest / node 26" or .name == "windows-2022 / node 26" or .name == "macos-latest / node 26" or .name == "macos-15-intel / node 26")) | .name] | unique | length'
+                --jq '[.jobs[] | select(.conclusion == "success" and (.name == "ubuntu-latest / node 26" or .name == "ubuntu-24.04-arm / node 26" or .name == "windows-2022 / node 26" or .name == "macos-latest / node 26" or .name == "macos-15-intel / node 26")) | .name] | unique | length'
             )"
-            if [ "$successful_build_jobs" -ne 4 ]; then
+            if [ "$successful_build_jobs" -ne "$expected_platforms" ]; then
               continue
             fi
 
@@ -1219,7 +1234,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
             )"
-            if [ "$artifact_count" -eq 4 ]; then
+            if [ "$artifact_count" -eq "$expected_platforms" ]; then
               build_run_id="$run_id"
               break
             fi
@@ -1234,7 +1249,7 @@ jobs:
           )
 
           if [ -z "$build_run_id" ]; then
-            echo "No PR run with four successful platform jobs and live artifacts matches tree $tag_tree" >&2
+            echo "No PR run with $expected_platforms successful platform jobs and live artifacts matches tree $tag_tree" >&2
             exit 1
           fi
 
@@ -1254,8 +1269,10 @@ jobs:
           fi
 
           asset_count="$(find release-assets -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
-          if [ "$asset_count" -ne 4 ]; then
-            echo "Expected 4 native archives, found $asset_count" >&2
+          expected_platforms="$(node --input-type=module -e \
+            'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length)')"
+          if [ "$asset_count" -ne "$expected_platforms" ]; then
+            echo "Expected $expected_platforms native archives, found $asset_count" >&2
             find release-assets -type f -print
             exit 1
           fi

@@ -513,9 +513,11 @@ else()
     set(chromium_llvm_bin
       ${libwebrtc_source_dir}/src/third_party/llvm-build/Release+Asserts/bin
     )
-    target_compile_options(${MODULE} PRIVATE
-      -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
-    )
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+      target_compile_options(${MODULE} PRIVATE
+        -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
+      )
+    endif()
     # WebRTC's pinned Clang can emit LLVM objects that GNU ld/collect2 cannot
     # consume.
     # Use the matching Chromium lld while retaining the system libstdc++ ABI.
