@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <string>
+
 #include <node-addon-api/napi.h>
 #include <webrtc/api/media_stream_interface.h>
 #include <webrtc/api/scoped_refptr.h>
@@ -34,6 +36,8 @@ class RTCVideoSink
   void Stop() override;
 
  private:
+  void DispatchError(std::string);
+
   Napi::Value GetStopped(const Napi::CallbackInfo&);
 
   Napi::Value JsStop(const Napi::CallbackInfo&);

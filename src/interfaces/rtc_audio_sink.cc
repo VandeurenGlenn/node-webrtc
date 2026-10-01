@@ -9,7 +9,10 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
+#include <new>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -63,16 +66,51 @@ Napi::Value RTCAudioSink::JsStop(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+void RTCAudioSink::DispatchError(std::string message) {
+  Dispatch(CreateCallback<RTCAudioSink>([this, message = std::move(message)]() {
+    auto env = Env();
+    Napi::HandleScope scope(env);
+    auto event = Napi::Object::New(env);
+    event.Set("type", Napi::String::New(env, "error"));
+    event.Set("error", Napi::Error::New(env, message).Value());
+    MakeCallback("dispatchEvent", { event });
+  }));
+}
+
 void RTCAudioSink::OnData(
     const void* audio_data,
     int bits_per_sample,
     int sample_rate,
     size_t number_of_channels,
     size_t number_of_frames) {
-  auto byte_length = number_of_channels * number_of_frames * bits_per_sample / 8;
-  std::unique_ptr<uint8_t[]> audio_data_copy(new uint8_t[byte_length]);
+  if (audio_data == nullptr || bits_per_sample <= 0 || bits_per_sample % 8 != 0) {
+    DispatchError("Received invalid audio sample data");
+    return;
+  }
+  if (bits_per_sample > std::numeric_limits<uint8_t>::max()
+      || sample_rate <= 0
+      || sample_rate > std::numeric_limits<uint16_t>::max()
+      || number_of_channels == 0
+      || number_of_channels > std::numeric_limits<uint8_t>::max()
+      || number_of_frames > std::numeric_limits<uint16_t>::max()) {
+    DispatchError("Received audio dimensions outside the supported range");
+    return;
+  }
+
+  const auto bytes_per_sample = static_cast<size_t>(bits_per_sample / 8);
+  if (number_of_frames > std::numeric_limits<size_t>::max() / number_of_channels) {
+    DispatchError("Received audio dimensions that overflow the sample buffer");
+    return;
+  }
+  const auto sample_count = number_of_channels * number_of_frames;
+  if (sample_count > std::numeric_limits<size_t>::max() / bytes_per_sample) {
+    DispatchError("Received audio dimensions that overflow the sample buffer");
+    return;
+  }
+  const auto byte_length = sample_count * bytes_per_sample;
+  std::unique_ptr<uint8_t[]> audio_data_copy(new (std::nothrow) uint8_t[byte_length]);
   if (!audio_data_copy) {
-    // TODO(mroberts): Throw an error somehow?
+    DispatchError("Failed to allocate an audio sample buffer");
     return;
   }
   memcpy(audio_data_copy.get(), audio_data, byte_length);
@@ -97,7 +135,7 @@ void RTCAudioSink::OnData(
     Napi::HandleScope scope(env);
     auto maybeValue = From<Napi::Value>(std::make_pair(env, dict));
     if (maybeValue.IsInvalid()) {
-      // TODO(mroberts): Should raise an error; although this really shouldn't happen.
+      DispatchError(maybeValue.ToErrors()[0]);
       return;
     }
     auto object = maybeValue.UnsafeFromValid().ToObject();

@@ -1,5 +1,8 @@
 #include "src/dictionaries/node_webrtc/rtc_on_data_event_dict.h"
 
+#include <limits>
+#include <new>
+
 #include <node-addon-api/napi.h>
 
 #include "src/converters/object.h"
@@ -28,16 +31,21 @@ static Validation<RTC_ON_DATA_EVENT_DICT> CreateRTCOnDataEventDict(
     return Validation<RTC_ON_DATA_EVENT_DICT>::Invalid(error);
   }
 
+  const auto bytesPerSample = static_cast<size_t>(bitsPerSample / 8);
+  const auto sampleCount = static_cast<size_t>(channelCount) * numberOfFrames;
+  if (bytesPerSample != 0
+      && sampleCount > std::numeric_limits<size_t>::max() / bytesPerSample) {
+    return Validation<RTC_ON_DATA_EVENT_DICT>::Invalid("Audio sample dimensions overflow the buffer size");
+  }
   auto actualByteLength = samples.ByteLength();
-  // NOLINTNEXTLINE
-  auto expectedByteLength = static_cast<size_t>(channelCount * numberOfFrames * bitsPerSample / 8);
+  auto expectedByteLength = sampleCount * bytesPerSample;
   if (actualByteLength != expectedByteLength) {
     auto error = "Expected a .byteLength of " + std::to_string(expectedByteLength) + ", not " +
         std::to_string(actualByteLength);
     return Validation<RTC_ON_DATA_EVENT_DICT>::Invalid(error);
   }
 
-  std::unique_ptr<uint8_t[]> samplesCopy(new uint8_t[actualByteLength]);
+  std::unique_ptr<uint8_t[]> samplesCopy(new (std::nothrow) uint8_t[actualByteLength]);
   if (!samplesCopy) {
     auto error = "Failed to copy samples";
     return Validation<RTC_ON_DATA_EVENT_DICT>::Invalid(error);

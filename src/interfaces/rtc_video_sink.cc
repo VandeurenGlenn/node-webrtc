@@ -7,6 +7,7 @@
  */
 #include "src/interfaces/rtc_video_sink.h"
 
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -60,13 +61,24 @@ Napi::Value RTCVideoSink::JsStop(const Napi::CallbackInfo& info) {
   return info.Env().Undefined();
 }
 
+void RTCVideoSink::DispatchError(std::string message) {
+  Dispatch(CreateCallback<RTCVideoSink>([this, message = std::move(message)]() {
+    auto env = Env();
+    Napi::HandleScope scope(env);
+    auto event = Napi::Object::New(env);
+    event.Set("type", Napi::String::New(env, "error"));
+    event.Set("error", Napi::Error::New(env, message).Value());
+    MakeCallback("dispatchEvent", { event });
+  }));
+}
+
 void RTCVideoSink::OnFrame(const webrtc::VideoFrame& frame) {
   Dispatch(CreateCallback<RTCVideoSink>([this, frame]() {
     auto env = Env();
     Napi::HandleScope scope(env);
     auto maybeValue = From<Napi::Value>(std::make_pair(env, frame));
     if (maybeValue.IsInvalid()) {
-      // TODO(mroberts): Should raise an error; although this really shouldn't happen.
+      DispatchError(maybeValue.ToErrors()[0]);
       return;
     }
     auto object = Napi::Object::New(env);
