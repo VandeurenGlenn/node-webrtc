@@ -6,6 +6,7 @@ import path from "node:path";
 const inputDirectory = process.argv[2] || "benchmark-artifacts";
 const outputDirectory = process.argv[3] || "benchmark-report";
 const historyDirectory = process.argv[4] || "benchmark-history";
+const wptSummaryPath = process.argv[5] || "";
 
 function findJsonFiles(directory) {
   if (!fs.existsSync(directory)) {
@@ -52,6 +53,23 @@ function deltaDisplay(comparison) {
     return { icon: "⚪", text: "baseline pending", className: "pending" };
   }
   const magnitude = Math.abs(comparison.deltaPercent).toFixed(2);
+  if (comparison.significant === false) {
+    if (comparison.paired) {
+      return {
+        icon: "●",
+        text: `${magnitude}% inconclusive (95% CI ${comparison.confidenceLowPercent.toFixed(2)}%…${comparison.confidenceHighPercent.toFixed(2)}%)`,
+        className: "pending",
+      };
+    }
+    const noise = comparison.significanceThresholdPercent?.toFixed(2);
+    return {
+      icon: "●",
+      text: noise
+        ? `${magnitude}% within ±${noise}% runner noise`
+        : `${magnitude}% within runner noise`,
+      className: "pending",
+    };
+  }
   if (Math.abs(comparison.deltaPercent) < 0.5) {
     return { icon: "●", text: `${magnitude}% unchanged`, className: "pending" };
   }
@@ -63,7 +81,9 @@ function deltaDisplay(comparison) {
     icon: slower
       ? (lowerIsBetter ? "↑" : "↓")
       : (lowerIsBetter ? "↓" : "↑"),
-    text: `${magnitude}% ${slower ? "slower" : "faster"}`,
+    text: `${magnitude}% ${slower ? "slower" : "faster"}${comparison.paired
+      ? ` · 95% CI ${comparison.confidenceLowPercent.toFixed(2)}%…${comparison.confidenceHighPercent.toFixed(2)}%`
+      : ""}`,
     className: slower ? "regression" : "improvement",
   };
 }
@@ -90,10 +110,22 @@ function comparisonFor(result, scenarioName) {
   const baselineMean = previous.scenarios[scenarioName].mean;
   const currentMean = result.scenarios[scenarioName].mean;
   const deltaPercent = baselineMean === 0 ? 0 : ((currentMean - baselineMean) / baselineMean) * 100;
+  const currentCv = currentMean === 0
+    ? 0
+    : (result.scenarios[scenarioName].stddev || 0) / Math.abs(currentMean);
+  const baselineCv = baselineMean === 0
+    ? 0
+    : (previous.scenarios[scenarioName].stddev || 0) / Math.abs(baselineMean);
+  const significanceThresholdPercent = Math.max(
+    0.5,
+    Math.sqrt(currentCv ** 2 + baselineCv ** 2) * 200,
+  );
   return {
     baselineMean,
     currentMean,
     deltaPercent,
+    significanceThresholdPercent,
+    significant: Math.abs(deltaPercent) > significanceThresholdPercent,
     lowerIsBetter: result.scenarios[scenarioName].lowerIsBetter !== false,
     regression: result.scenarios[scenarioName].lowerIsBetter === false
       ? deltaPercent < -5
@@ -273,13 +305,19 @@ const unsupportedImplementations = implementationResults
   .map((result) => `<li><strong>${escapeHtml(result.meta.implementation)}</strong>: ${escapeHtml(result.reason)}</li>`)
   .join("");
 const implementationSection = implementationResults.length === 0 ? "" : `<section class="comparison"><h2>Node WebRTC implementation comparison</h2><p>Identical DataChannel scenarios on one Linux x64 runner. Lower latency and higher throughput are better; rankings use the median to reduce outlier bias.</p>${overallWinner ? `<div class="overall"><h3>Overall winner: ${escapeHtml(overallWinner)} 🏆</h3><p>Geometric mean of each implementation's ratio to the best result per scenario. A score of 1.00× is best.</p>${overallRows}</div>` : ""}<p class="score"><strong>@vandeurenglenn/wrtc wins ${projectWins} of ${implementationScenarioNames.length} individual scenarios.</strong> It is highlighted in blue; each row shows its rank and distance from the best implementation.</p><details class="implementation-details"><summary>Scenario breakdown and methodology</summary><p class="method-note">Only implementations on Node ${escapeHtml(projectResult?.meta.node || "26")} are eligible for the overall title. Koush wrtc 0.4.7 is measured on legacy Node 14.21.3 because it does not load on Node 26; its result is a historical reference, not a strictly equivalent runtime comparison. Create/close alone is not an end-to-end score: implementations may defer ICE, DTLS, SCTP, or native initialization until negotiation. Shared GitHub runners also introduce noise, so small single-run differences should be confirmed across history before optimization.</p>${implementationCharts}${unsupportedImplementations ? `<h3>Unsupported</h3><ul>${unsupportedImplementations}</ul>` : ""}</details></section>`;
+const wptSummary = wptSummaryPath && fs.existsSync(wptSummaryPath)
+  ? JSON.parse(fs.readFileSync(wptSummaryPath, "utf8"))
+  : null;
+const wptSection = wptSummary
+  ? `<section class="quality-summary"><strong>WPT compatibility plan</strong><span>${wptSummary.expectedPass} expected pass</span><span>${wptSummary.expectedFail} expected fail</span><span>${wptSummary.skipped} skipped</span></section>`
+  : "";
 
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>node-webrtc benchmarks</title>
 <style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#0d1117;color:#e6edf3}*{box-sizing:border-box}body{max-width:1200px;margin:auto;padding:28px 20px}h1{margin-bottom:4px}.intro{color:#8b949e;margin-top:0}.platform-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:22px 0}.platform-tab{appearance:none;text-align:left;color:inherit;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;cursor:pointer}.platform-tab:hover{border-color:#58a6ff}.platform-tab[aria-selected="true"]{border-color:#58a6ff;box-shadow:0 0 0 1px #58a6ff;background:#1f2937}.platform-tab span,.platform-tab strong,.platform-tab small{display:block}.platform-tab span{font-weight:700}.platform-tab strong{margin:5px 0;font-size:13px}.platform-tab small{color:#8b949e}.platform-panel[hidden]{display:none}.card,.comparison{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px}.card header{display:flex;justify-content:space-between;align-items:baseline;gap:16px}.card header h2{margin:0}.card header p,.comparison>p{color:#8b949e;margin:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;margin-top:12px}.scenario,.implementation-scenario{border-top:1px solid #30363d;padding:12px 0}.scenario h3,.implementation-scenario h3{font-size:14px;margin:0 0 10px}.bar-row{display:grid;grid-template-columns:58px 1fr 84px;gap:7px;align-items:center;font-size:12px;margin:6px 0}.track{height:9px;background:#21262d;border-radius:5px;overflow:hidden}.track i{display:block;height:100%;border-radius:5px}.current{background:#58a6ff}.baseline{background:#8b949e}.implementation{background:#a371f7}.implementation.winner{background:#3fb950}.bar-row strong{text-align:right}.delta{margin:5px 0;font-weight:700}.improvement{color:#3fb950}.regression{color:#f85149}.pending,.history-pending{color:#8b949e}.history{margin-top:7px}.history summary,.implementation-details>summary{cursor:pointer;color:#8b949e;font-size:12px;font-weight:700}.timeline{display:block;width:100%;height:auto;margin-top:8px;background:#0d1117;border-radius:6px}.timeline polyline{fill:none;stroke:#58a6ff;stroke-width:2}.timeline circle{fill:#58a6ff;stroke:#0d1117;stroke-width:2}.timeline-labels{display:flex;justify-content:space-between;color:#8b949e;font-size:10px;margin-top:3px}.comparison{margin-top:18px}.overall{padding:14px;border:1px solid #3fb950;border-radius:10px;background:#0d1117}.overall h3{color:#3fb950;margin-top:0}.overall>p{color:#8b949e;font-size:13px}.overall-row{display:flex;justify-content:space-between;gap:20px;padding:7px;border-top:1px solid #21262d}.overall-row.project{color:#58a6ff}.overall-row small{display:block;color:#8b949e;font-weight:400}.overall-row strong{text-align:right}.score{padding:10px;border-radius:8px;background:#0d1117}.score strong{color:#58a6ff}.implementation-details{border-top:1px solid #30363d;padding-top:12px}.implementation-details>summary{font-size:14px}.method-note{font-size:13px;border-left:3px solid #d29922;padding-left:10px}.implementation-row{display:grid;grid-template-columns:minmax(180px,250px) 1fr 105px;gap:10px;align-items:center;font-size:12px;margin:9px 0;padding:4px}.implementation-row.project{background:#1f2937;border-radius:6px}.implementation-row.project span{color:#58a6ff}.implementation-row span b{color:#8b949e}.implementation-row span small{display:block;color:#8b949e;margin-left:24px}.implementation-row strong{text-align:right}.implementation-row strong small{display:block;color:#8b949e;font-weight:400}footer{color:#8b949e;margin-top:20px;font-size:12px}@media(max-width:720px){body{padding:20px 12px}.scenario-grid{grid-template-columns:1fr}.card header{display:block}.card header p{margin-top:5px}.implementation-row{grid-template-columns:1fr}.implementation-row strong{text-align:left}}
-</style></head><body><h1>node-webrtc benchmarks</h1><p class="intro">Lower latency and higher throughput are better. Current commit is compared with the latest successful develop build on identical runner architecture.</p><nav class="platform-tabs" aria-label="Benchmark platform">${platformTabs}</nav><main>${cards}</main>${implementationSection}<footer>Generated ${escapeHtml(new Date().toISOString())}</footer><script>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#0d1117;color:#e6edf3}*{box-sizing:border-box}body{max-width:1200px;margin:auto;padding:28px 20px}h1{margin-bottom:4px}.intro{color:#8b949e;margin-top:0}.quality-summary{display:flex;flex-wrap:wrap;gap:8px 18px;margin:14px 0;padding:10px 12px;background:#161b22;border:1px solid #30363d;border-radius:10px}.quality-summary strong{color:#58a6ff}.quality-summary span{color:#8b949e}.platform-tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:22px 0}.platform-tab{appearance:none;text-align:left;color:inherit;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;cursor:pointer}.platform-tab:hover{border-color:#58a6ff}.platform-tab[aria-selected="true"]{border-color:#58a6ff;box-shadow:0 0 0 1px #58a6ff;background:#1f2937}.platform-tab span,.platform-tab strong,.platform-tab small{display:block}.platform-tab span{font-weight:700}.platform-tab strong{margin:5px 0;font-size:13px}.platform-tab small{color:#8b949e}.platform-panel[hidden]{display:none}.card,.comparison{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px}.card header{display:flex;justify-content:space-between;align-items:baseline;gap:16px}.card header h2{margin:0}.card header p,.comparison>p{color:#8b949e;margin:0}.scenario-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;margin-top:12px}.scenario,.implementation-scenario{border-top:1px solid #30363d;padding:12px 0}.scenario h3,.implementation-scenario h3{font-size:14px;margin:0 0 10px}.bar-row{display:grid;grid-template-columns:58px 1fr 84px;gap:7px;align-items:center;font-size:12px;margin:6px 0}.track{height:9px;background:#21262d;border-radius:5px;overflow:hidden}.track i{display:block;height:100%;border-radius:5px}.current{background:#58a6ff}.baseline{background:#8b949e}.implementation{background:#a371f7}.implementation.winner{background:#3fb950}.bar-row strong{text-align:right}.delta{margin:5px 0;font-weight:700}.improvement{color:#3fb950}.regression{color:#f85149}.pending,.history-pending{color:#8b949e}.history{margin-top:7px}.history summary,.implementation-details>summary{cursor:pointer;color:#8b949e;font-size:12px;font-weight:700}.timeline{display:block;width:100%;height:auto;margin-top:8px;background:#0d1117;border-radius:6px}.timeline polyline{fill:none;stroke:#58a6ff;stroke-width:2}.timeline circle{fill:#58a6ff;stroke:#0d1117;stroke-width:2}.timeline-labels{display:flex;justify-content:space-between;color:#8b949e;font-size:10px;margin-top:3px}.comparison{margin-top:18px}.overall{padding:14px;border:1px solid #3fb950;border-radius:10px;background:#0d1117}.overall h3{color:#3fb950;margin-top:0}.overall>p{color:#8b949e;font-size:13px}.overall-row{display:flex;justify-content:space-between;gap:20px;padding:7px;border-top:1px solid #21262d}.overall-row.project{color:#58a6ff}.overall-row small{display:block;color:#8b949e;font-weight:400}.overall-row strong{text-align:right}.score{padding:10px;border-radius:8px;background:#0d1117}.score strong{color:#58a6ff}.implementation-details{border-top:1px solid #30363d;padding-top:12px}.implementation-details>summary{font-size:14px}.method-note{font-size:13px;border-left:3px solid #d29922;padding-left:10px}.implementation-row{display:grid;grid-template-columns:minmax(180px,250px) 1fr 105px;gap:10px;align-items:center;font-size:12px;margin:9px 0;padding:4px}.implementation-row.project{background:#1f2937;border-radius:6px}.implementation-row.project span{color:#58a6ff}.implementation-row span b{color:#8b949e}.implementation-row span small{display:block;color:#8b949e;margin-left:24px}.implementation-row strong{text-align:right}.implementation-row strong small{display:block;color:#8b949e;font-weight:400}footer{color:#8b949e;margin-top:20px;font-size:12px}@media(max-width:720px){body{padding:20px 12px}.scenario-grid{grid-template-columns:1fr}.card header{display:block}.card header p{margin-top:5px}.implementation-row{grid-template-columns:1fr}.implementation-row strong{text-align:left}}
+</style></head><body><h1>node-webrtc benchmarks</h1><p class="intro">Lower latency and higher throughput are better. Current commit is compared with the latest successful develop build on identical runner architecture.</p>${wptSection}<nav class="platform-tabs" aria-label="Benchmark platform">${platformTabs}</nav><main>${cards}</main>${implementationSection}<footer>Generated ${escapeHtml(new Date().toISOString())}</footer><script>
 const tabs = [...document.querySelectorAll(".platform-tab")];
 const panels = [...document.querySelectorAll(".platform-panel")];
 function activatePlatform(target) {

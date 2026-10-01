@@ -631,17 +631,27 @@ function computeComparison(result, baseline, threshold) {
     const delta = current.mean - previous.mean;
     const deltaPercent =
       previous.mean === 0 ? 0 : (delta / previous.mean) * 100;
+    const currentCv = current.mean === 0 ? 0 : (current.stddev || 0) / Math.abs(current.mean);
+    const baselineCv = previous.mean === 0 ? 0 : (previous.stddev || 0) / Math.abs(previous.mean);
+    const noisePercent = Math.sqrt(currentCv ** 2 + baselineCv ** 2) * 100;
+    // Two combined standard deviations is a deliberately conservative signal
+    // threshold for noisy hosted runners. Keep a small floor for rounded data.
+    const significanceThresholdPercent = Math.max(0.5, noisePercent * 2);
+    const significant = Math.abs(deltaPercent) > significanceThresholdPercent;
 
     comparison[name] = {
       baselineMean: round(previous.mean, 3),
       currentMean: round(current.mean, 3),
       deltaMs: round(delta, 3),
       deltaPercent: round(deltaPercent, 2),
+      noisePercent: round(noisePercent, 2),
+      significanceThresholdPercent: round(significanceThresholdPercent, 2),
+      significant,
       lowerIsBetter: current.lowerIsBetter !== false,
       regression:
-        current.lowerIsBetter === false
+        significant && (current.lowerIsBetter === false
           ? deltaPercent < -threshold
-          : deltaPercent > threshold,
+          : deltaPercent > threshold),
     };
   });
 
