@@ -1,3 +1,15 @@
+Unreleased
+==========
+
+Bug Fixes
+---------
+
+- Validate native audio buffer dimensions before allocation and emit sink
+  errors instead of silently dropping conversion failures.
+- Preserve fractional RTP maximum frame rates and reject encoding values that
+  cannot be represented safely by libwebrtc.
+- Correct the internal `Either` applicative and alternative success paths.
+
 0.7.1
 =====
 

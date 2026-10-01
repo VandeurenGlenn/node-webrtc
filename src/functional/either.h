@@ -28,7 +28,7 @@ namespace node_webrtc {
 template <typename L, typename R>
 class Either {
  public:
-  // TODO(mroberts): This is no good.
+  // TODO(mroberts): Replace the dual default-constructed storage with a tagged union.
   Either(): _is_right(false), _left(L()), _right(R()) {}
 
   /**
@@ -44,7 +44,8 @@ class Either {
     } else if (IsLeft()) {
       return Either<L, std::invoke_result_t<F, R>>::Left(_left);
     }
-    return Either<L, std::invoke_result_t<F, R>>::Left(_right);
+    return Either<L, std::invoke_result_t<F, R>>::Right(
+        f.UnsafeFromRight()(_right));
   }
 
   /**
@@ -115,7 +116,7 @@ class Either {
    * @return this or that
    */
   Either<L, R> Or(const Either<L, R> that) const {
-    return _is_right ? this : that;
+    return _is_right ? *this : that;
   }
 
   /**

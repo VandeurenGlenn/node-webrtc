@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include <node-addon-api/napi.h>
 #include <webrtc/api/media_stream_interface.h>
@@ -38,6 +39,8 @@ class RTCAudioSink
   void Stop() override;
 
  private:
+  void DispatchError(std::string);
+
   Napi::Value GetStopped(const Napi::CallbackInfo&);
 
   Napi::Value JsStop(const Napi::CallbackInfo&);

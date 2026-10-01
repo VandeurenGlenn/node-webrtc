@@ -1,7 +1,9 @@
 #include "src/dictionaries/webrtc/rtp_encoding_parameters.h"
 
+#include <cmath>
 #include <cstdint>
 #include <iosfwd>
+#include <limits>
 #include <string>
 
 #include <webrtc/api/rtp_parameters.h>
@@ -55,19 +57,49 @@ static Validation<webrtc::RtpEncodingParameters> RTP_ENCODING_PARAMETERS_FN(
     // NOTE(mroberts): No longer supported in WebRTC 1.0.
   }
   parameters.active = active;
-  // TODO(mroberts): Do something with this.
-  (void) priority;
+  switch (priority) {
+    case RTCPriorityType::kVeryLow:
+      parameters.bitrate_priority = 0.5;
+      break;
+    case RTCPriorityType::kLow:
+      parameters.bitrate_priority = 1.0;
+      break;
+    case RTCPriorityType::kMedium:
+      parameters.bitrate_priority = 2.0;
+      break;
+    case RTCPriorityType::kHigh:
+      parameters.bitrate_priority = 4.0;
+      break;
+    default:
+      return Validation<webrtc::RtpEncodingParameters>::Invalid(
+          "Unsupported .priority value");
+  }
   if (ptime.IsJust()) {
     // NOTE(mroberts): No longer supported in WebRTC 1.0.
   }
   if (maxBitrate.IsJust()) {
-    parameters.max_bitrate_bps = absl::optional<int>(maxBitrate.UnsafeFromJust());
+    const auto value = maxBitrate.UnsafeFromJust();
+    if (value > static_cast<uint64_t>(std::numeric_limits<int>::max())) {
+      return Validation<webrtc::RtpEncodingParameters>::Invalid(
+          "Expected .maxBitrate to fit in a native signed integer");
+    }
+    parameters.max_bitrate_bps = absl::optional<int>(static_cast<int>(value));
   }
   if (maxFramerate.IsJust()) {
-    parameters.max_framerate = absl::optional<int>(maxFramerate.UnsafeFromJust());
+    const auto value = maxFramerate.UnsafeFromJust();
+    if (!std::isfinite(value) || value < 0) {
+      return Validation<webrtc::RtpEncodingParameters>::Invalid(
+          "Expected .maxFramerate to be a finite non-negative number");
+    }
+    parameters.max_framerate = absl::optional<double>(value);
   }
   if (scaleResolutionDownBy.IsJust()) {
-    parameters.scale_resolution_down_by = absl::optional<double>(scaleResolutionDownBy.UnsafeFromJust());
+    const auto value = scaleResolutionDownBy.UnsafeFromJust();
+    if (!std::isfinite(value) || value < 1) {
+      return Validation<webrtc::RtpEncodingParameters>::Invalid(
+          "Expected .scaleResolutionDownBy to be a finite number greater than or equal to 1");
+    }
+    parameters.scale_resolution_down_by = absl::optional<double>(value);
   }
   return Pure(parameters);
 }
@@ -83,6 +115,9 @@ TO_NAPI_IMPL(webrtc::RtpEncodingParameters, pair) {
   NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, object, "active", parameters.active)
   if (parameters.max_bitrate_bps) {
     NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, object, "maxBitrate", parameters.max_bitrate_bps)
+  }
+  if (parameters.max_framerate) {
+    NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, object, "maxFramerate", parameters.max_framerate)
   }
   if (parameters.scale_resolution_down_by) {
     NODE_WEBRTC_CONVERT_AND_SET_OR_RETURN(env, object, "scaleResolutionDownBy", parameters.scale_resolution_down_by)

@@ -134,6 +134,57 @@ tape('.replaceTrack(null)', function(t) {
   });
 });
 
+tape('.setParameters validates native encoding ranges', function(t) {
+  var pc = new RTCPeerConnection();
+  var sender = pc.addTransceiver('video').sender;
+
+  function parametersWith(name, value) {
+    var parameters = sender.getParameters();
+    parameters.encodings[0][name] = value;
+    return parameters;
+  }
+
+  function expectRejected(promise, pattern, message) {
+    return promise.then(function() {
+      t.fail(message);
+    }, function(error) {
+      t.ok(pattern.test(error.message), message);
+    });
+  }
+
+  return Promise.all([
+    expectRejected(
+      sender.setParameters(parametersWith('maxBitrate', 2147483648)),
+      /maxBitrate/,
+      'maxBitrate must fit WebRTC\'s native signed integer'
+    ),
+    expectRejected(
+      sender.setParameters(parametersWith('maxFramerate', Infinity)),
+      /maxFramerate/,
+      'maxFramerate must be finite'
+    ),
+    expectRejected(
+      sender.setParameters(parametersWith('scaleResolutionDownBy', 0.5)),
+      /scaleResolutionDownBy/,
+      'scaleResolutionDownBy must be at least 1'
+    )
+  ]).then(function() {
+    var parameters = parametersWith('maxFramerate', 29.97);
+    return sender.setParameters(parameters);
+  }).then(function() {
+    t.equal(
+      sender.getParameters().encodings[0].maxFramerate,
+      29.97,
+      'fractional maxFramerate is preserved'
+    );
+    pc.close();
+    t.end();
+  }, function(error) {
+    pc.close();
+    throw error;
+  });
+});
+
 function getMediaStream() {
   var pc = new RTCPeerConnection();
   var offer = new RTCSessionDescription({ type: 'offer', sdp: sdp });
