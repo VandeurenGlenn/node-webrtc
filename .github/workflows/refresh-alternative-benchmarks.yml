@@ -1,0 +1,60 @@
+name: Refresh Alternative Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/cross-platform-source-build.yml"
+      - ".github/workflows/refresh-alternative-benchmarks.yml"
+      - "benchmarks/run.js"
+      - "benchmarks/unsupported-result.js"
+      - "scripts/benchmark-alternatives.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alternative-benchmarks
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Measure pinned alternatives
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup legacy Node.js for Koush wrtc
+        uses: actions/setup-node@v7
+        with:
+          node-version: 14.21.3
+
+      - name: Benchmark Koush legacy implementation
+        shell: bash
+        run: bash scripts/benchmark-alternatives.sh legacy
+
+      - name: Setup current Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Benchmark current alternative implementations
+        shell: bash
+        run: bash scripts/benchmark-alternatives.sh current
+
+      - name: Record benchmark harness key
+        run: echo "${{ hashFiles('benchmarks/run.js', 'benchmarks/unsupported-result.js', 'scripts/benchmark-alternatives.sh') }}" > benchmarks/implementations/cache-key.txt
+
+      - name: Preserve trusted alternative results
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-alternatives
+          path: benchmarks/implementations/*.json
+          if-no-files-found: error
+          retention-days: 90

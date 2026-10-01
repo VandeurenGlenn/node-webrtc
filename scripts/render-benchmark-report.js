@@ -259,6 +259,7 @@ const overallRanking = comparableImplementations.map((result) => {
   return {
     label: result.meta.implementation,
     node: result.meta.node,
+    measuredAt: new Date(result.meta.timestamp).toISOString().slice(0, 10),
     score: Math.exp(ratios.reduce((sum, ratio) => sum + Math.log(ratio), 0) / ratios.length),
   };
 }).sort((a, b) => a.score - b.score);
@@ -266,8 +267,12 @@ const winningScore = overallRanking[0]?.score || 1;
 const overallRows = overallRanking.map((entry, index) => {
   const relativeScore = entry.score / winningScore;
   const projectClass = entry.label === "@vandeurenglenn/wrtc" ? " project" : "";
-  return `<div class="overall-row${projectClass}"><span>${index === 0 ? "🏆" : `#${index + 1}`} ${escapeHtml(entry.label)}<small>Node ${escapeHtml(entry.node)}</small></span><strong>${relativeScore.toFixed(2)}×<small>${index === 0 ? "overall winner" : "normalized cost"}</small></strong></div>`;
+  return `<div class="overall-row${projectClass}"><span>${index === 0 ? "🏆" : `#${index + 1}`} ${escapeHtml(entry.label)}<small>Node ${escapeHtml(entry.node)} · measured ${escapeHtml(entry.measuredAt)}</small></span><strong>${relativeScore.toFixed(2)}×<small>${index === 0 ? "overall winner" : "normalized cost"}</small></strong></div>`;
 }).join("");
+const implementationMeasuredAt = Object.fromEntries(implementationResults.map((result) => [
+  result.meta.implementation,
+  new Date(result.meta.timestamp).toISOString().slice(0, 10),
+]));
 const overallWinner = overallRanking[0]?.label;
 let projectWins = 0;
 const implementationCharts = implementationScenarioNames.map((name) => {
@@ -277,6 +282,7 @@ const implementationCharts = implementationScenarioNames.map((name) => {
     .map((result) => ({
       label: result.meta.implementation,
       node: result.meta.node,
+      measuredAt: implementationMeasuredAt[result.meta.implementation],
       value: result.scenarios[name].median,
     }))
     .sort((a, b) => lowerIsBetter ? a.value - b.value : b.value - a.value);
@@ -296,7 +302,7 @@ const implementationCharts = implementationScenarioNames.map((name) => {
         ? `+${slower.toFixed(1)}% slower`
         : `${slower.toFixed(1)}% below best`;
     const projectClass = entry.label === "@vandeurenglenn/wrtc" ? " project" : "";
-    return `<div class="implementation-row${projectClass}"><span><b>#${index + 1}</b> ${escapeHtml(entry.label)}<small>Node ${escapeHtml(entry.node)}</small></span><div class="track"><i class="implementation${index === 0 ? " winner" : ""}" style="width:${Math.max(2, (entry.value / maximum) * 100)}%"></i></div><strong>${formatScenarioValue(entry.value, scenario)}<small>${status}</small></strong></div>`;
+    return `<div class="implementation-row${projectClass}"><span><b>#${index + 1}</b> ${escapeHtml(entry.label)}<small>Node ${escapeHtml(entry.node)} · measured ${escapeHtml(entry.measuredAt)}</small></span><div class="track"><i class="implementation${index === 0 ? " winner" : ""}" style="width:${Math.max(2, (entry.value / maximum) * 100)}%"></i></div><strong>${formatScenarioValue(entry.value, scenario)}<small>${status}</small></strong></div>`;
   }).join("");
   return `<section class="implementation-scenario"><h3>${escapeHtml(labelScenario(name))}</h3>${rows}</section>`;
 }).join("\n");
@@ -304,7 +310,7 @@ const unsupportedImplementations = implementationResults
   .filter((result) => result.status === "unsupported")
   .map((result) => `<li><strong>${escapeHtml(result.meta.implementation)}</strong>: ${escapeHtml(result.reason)}</li>`)
   .join("");
-const implementationSection = implementationResults.length === 0 ? "" : `<section class="comparison"><h2>Node WebRTC implementation comparison</h2><p>Identical DataChannel scenarios on one Linux x64 runner. Lower latency and higher throughput are better; rankings use the median to reduce outlier bias.</p>${overallWinner ? `<div class="overall"><h3>Overall winner: ${escapeHtml(overallWinner)} 🏆</h3><p>Geometric mean of each implementation's ratio to the best result per scenario. A score of 1.00× is best.</p>${overallRows}</div>` : ""}<p class="score"><strong>@vandeurenglenn/wrtc wins ${projectWins} of ${implementationScenarioNames.length} individual scenarios.</strong> It is highlighted in blue; each row shows its rank and distance from the best implementation.</p><details class="implementation-details"><summary>Scenario breakdown and methodology</summary><p class="method-note">Only implementations on Node ${escapeHtml(projectResult?.meta.node || "26")} are eligible for the overall title. Koush wrtc 0.4.7 is measured on legacy Node 14.21.3 because it does not load on Node 26; its result is a historical reference, not a strictly equivalent runtime comparison. Create/close alone is not an end-to-end score: implementations may defer ICE, DTLS, SCTP, or native initialization until negotiation. Shared GitHub runners also introduce noise, so small single-run differences should be confirmed across history before optimization.</p>${implementationCharts}${unsupportedImplementations ? `<h3>Unsupported</h3><ul>${unsupportedImplementations}</ul>` : ""}</details></section>`;
+const implementationSection = implementationResults.length === 0 ? "" : `<section class="comparison"><h2>Node WebRTC implementation comparison</h2><p>Identical DataChannel scenarios on Linux x64. Pinned alternatives are refreshed weekly and reused between relevant changes; every result shows its measurement date. Lower latency and higher throughput are better, and rankings use the median to reduce outlier bias.</p>${overallWinner ? `<div class="overall"><h3>Overall winner: ${escapeHtml(overallWinner)} 🏆</h3><p>Geometric mean of each implementation's ratio to the best result per scenario. A score of 1.00× is best.</p>${overallRows}</div>` : ""}<p class="score"><strong>@vandeurenglenn/wrtc wins ${projectWins} of ${implementationScenarioNames.length} individual scenarios.</strong> It is highlighted in blue; each row shows its rank and distance from the best implementation.</p><details class="implementation-details"><summary>Scenario breakdown and methodology</summary><p class="method-note">Only implementations on Node ${escapeHtml(projectResult?.meta.node || "26")} are eligible for the overall title. Reused results avoid repeatedly benchmarking unchanged packages, but runner variance means close scores are directional until the weekly refresh confirms them. Koush wrtc 0.4.7 is measured on legacy Node 14.21.3 because it does not load on Node 26; its result is a historical reference, not a strictly equivalent runtime comparison. Create/close alone is not an end-to-end score: implementations may defer ICE, DTLS, SCTP, or native initialization until negotiation.</p>${implementationCharts}${unsupportedImplementations ? `<h3>Unsupported</h3><ul>${unsupportedImplementations}</ul>` : ""}</details></section>`;
 const wptSummary = wptSummaryPath && fs.existsSync(wptSummaryPath)
   ? JSON.parse(fs.readFileSync(wptSummaryPath, "utf8"))
   : null;

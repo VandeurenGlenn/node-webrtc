@@ -31,6 +31,7 @@ jobs:
       source_build: ${{ steps.classify.outputs.source_build }}
       native: ${{ steps.classify.outputs.native }}
       performance: ${{ steps.classify.outputs.performance }}
+      alternative_benchmarks: ${{ steps.classify.outputs.alternative_benchmarks }}
       wpt: ${{ steps.classify.outputs.wpt }}
     steps:
       - name: Checkout
@@ -48,6 +49,7 @@ jobs:
           source_build=false
           native=false
           performance=false
+          alternative_benchmarks=false
           wpt=false
 
           while IFS= read -r file; do
@@ -63,7 +65,12 @@ jobs:
                 performance=true
                 wpt=true
                 ;;
-              benchmarks/run.js|benchmarks/run-paired.js|benchmarks/unsupported-result.js)
+              benchmarks/run.js|benchmarks/unsupported-result.js|scripts/benchmark-alternatives.sh)
+                source_build=true
+                performance=true
+                alternative_benchmarks=true
+                ;;
+              benchmarks/run-paired.js)
                 source_build=true
                 performance=true
                 ;;
@@ -78,6 +85,7 @@ jobs:
                 source_build=true
                 native=true
                 performance=true
+                alternative_benchmarks=true
                 wpt=true
                 ;;
               *)
@@ -90,9 +98,10 @@ jobs:
           echo "source_build=$source_build" >> "$GITHUB_OUTPUT"
           echo "native=$native" >> "$GITHUB_OUTPUT"
           echo "performance=$performance" >> "$GITHUB_OUTPUT"
+          echo "alternative_benchmarks=$alternative_benchmarks" >> "$GITHUB_OUTPUT"
           echo "wpt=$wpt" >> "$GITHUB_OUTPUT"
-          printf 'source-build=%s\nnative=%s\nperformance=%s\nwpt=%s\n' \
-            "$source_build" "$native" "$performance" "$wpt"
+          printf 'source-build=%s\nnative=%s\nperformance=%s\nalternative-benchmarks=%s\nwpt=%s\n' \
+            "$source_build" "$native" "$performance" "$alternative_benchmarks" "$wpt"
 
   tooling:
     name: Lint and dependency audit
@@ -818,74 +827,70 @@ jobs:
             --messages 10 \
             --output benchmarks/implementations/vandeurenglenn-wrtc.json
 
+      - name: Reuse trusted alternative benchmark results
+        id: alternative-cache
+        if: needs.changes.outputs.alternative_benchmarks != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=benchmark-alternatives&per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "develop")] | sort_by(.created_at) | reverse | .[0].workflow_run.id // empty'
+          )"
+          if [ -z "$run_id" ]; then
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "No trusted alternative benchmark cache found; measuring alternatives"
+            exit 0
+          fi
+          if ! gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name benchmark-alternatives \
+              --dir benchmarks/implementations; then
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "Trusted cache download failed; measuring alternatives"
+            exit 0
+          fi
+          expected_key="${{ hashFiles('benchmarks/run.js', 'benchmarks/unsupported-result.js', 'scripts/benchmark-alternatives.sh') }}"
+          cached_key="$(cat benchmarks/implementations/cache-key.txt 2>/dev/null || true)"
+          if [ "$cached_key" != "$expected_key" ]; then
+            rm -f benchmarks/implementations/*.json benchmarks/implementations/cache-key.txt
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "Alternative benchmark cache does not match the current harness; measuring alternatives"
+            exit 0
+          fi
+          if ! test -s benchmarks/implementations/koush-wrtc.json \
+              || ! test -s benchmarks/implementations/roamhq-wrtc.json \
+              || ! test -s benchmarks/implementations/werift.json; then
+            rm -f benchmarks/implementations/*.json benchmarks/implementations/cache-key.txt
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "Trusted cache is incomplete; measuring alternatives"
+            exit 0
+          fi
+          echo "hit=true" >> "$GITHUB_OUTPUT"
+          echo "Reusing alternative benchmarks from trusted run $run_id"
+
       - name: Setup legacy Node.js for Koush wrtc
+        if: needs.changes.outputs.alternative_benchmarks == 'true' || steps.alternative-cache.outputs.hit != 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 14.21.3
 
       - name: Benchmark Koush legacy implementation
+        if: needs.changes.outputs.alternative_benchmarks == 'true' || steps.alternative-cache.outputs.hit != 'true'
         shell: bash
-        run: |
-          install_dir="$RUNNER_TEMP/webrtc-implementations/koush-wrtc"
-          output="benchmarks/implementations/koush-wrtc.json"
-          mkdir -p "$install_dir"
-          if npm install --prefix "$install_dir" --no-package-lock 'wrtc@0.4.7'; then
-            module_path="$(node -e 'console.log(require.resolve(process.argv[1], { paths: [process.argv[2]] }))' wrtc "$install_dir")"
-            if node benchmarks/run.js \
-              --suite implementation-comparison \
-              --implementation 'Koush wrtc 0.4.7' \
-              --module "$module_path" \
-              --iterations 5 \
-              --warmup 1 \
-              --compare-runs 3 \
-              --messages 10 \
-              --output "$output"; then
-              exit 0
-            fi
-            reason='installed on Node 14 but benchmark API is incompatible'
-          else
-            reason='package is unavailable on its legacy Node 14 runtime'
-          fi
-          node benchmarks/unsupported-result.js 'Koush wrtc 0.4.7' "$output" "$reason"
+        run: bash scripts/benchmark-alternatives.sh legacy
 
       - name: Restore current Node.js
+        if: needs.changes.outputs.alternative_benchmarks == 'true' || steps.alternative-cache.outputs.hit != 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 26
 
       - name: Benchmark alternative implementations
+        if: needs.changes.outputs.alternative_benchmarks == 'true' || steps.alternative-cache.outputs.hit != 'true'
         shell: bash
-        run: |
-          benchmark_implementation() {
-            label="$1"
-            package_spec="$2"
-            package_name="$3"
-            output_name="$4"
-            install_dir="$RUNNER_TEMP/webrtc-implementations/$output_name"
-            output="benchmarks/implementations/$output_name.json"
-            mkdir -p "$install_dir"
-            if npm install --prefix "$install_dir" --no-package-lock "$package_spec"; then
-              module_path="$(node -e 'console.log(require.resolve(process.argv[1], { paths: [process.argv[2]] }))' "$package_name" "$install_dir")"
-              if node benchmarks/run.js \
-                --suite implementation-comparison \
-                --implementation "$label" \
-                --module "$module_path" \
-                --iterations 5 \
-                --warmup 1 \
-                --compare-runs 3 \
-                --messages 10 \
-                --output "$output"; then
-                return
-              fi
-              reason="installed but benchmark API is incompatible"
-            else
-              reason="package is unavailable on Node ${NODE_VERSION:-26}"
-            fi
-            node benchmarks/unsupported-result.js "$label" "$output" "$reason"
-          }
-
-          benchmark_implementation '@roamhq/wrtc 0.10.0' '@roamhq/wrtc@0.10.0' '@roamhq/wrtc' 'roamhq-wrtc'
-          benchmark_implementation 'werift 0.24.4' 'werift@0.24.4' 'werift' 'werift'
+        run: bash scripts/benchmark-alternatives.sh current
 
       - name: Preserve implementation results
         uses: actions/upload-artifact@v7
