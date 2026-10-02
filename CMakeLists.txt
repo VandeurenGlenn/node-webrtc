@@ -495,7 +495,7 @@ else()
     set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
     if ("$ENV{TARGET_ARCH}" STREQUAL "arm")
-      set(CMAKE_SYSROOT ${libwebrtc_source_dir}/src/build/linux/debian_sid_arm-sysroot)
+      set(CMAKE_SYSROOT ${libwebrtc_source_dir}/src/build/linux/debian_bullseye_armhf-sysroot)
       target_compile_options(${MODULE} PRIVATE
         -march=armv7-a
         -mfloat-abi=hard
@@ -505,19 +505,23 @@ else()
       set(CMAKE_C_COMPILER ${tools}/bin/arm-linux-gnueabihf-gcc)
       set(CMAKE_CXX_COMPILER ${tools}/bin/arm-linux-gnueabihf-g++)
     else()
-      set(CMAKE_SYSROOT ${libwebrtc_source_dir}/src/build/linux/debian_sid_arm64-sysroot)
+      set(CMAKE_SYSROOT ${libwebrtc_source_dir}/src/build/linux/debian_bullseye_arm64-sysroot)
       set(CMAKE_C_COMPILER ${tools}/bin/aarch64-linux-gnu-gcc)
       set(CMAKE_CXX_COMPILER ${tools}/bin/aarch64-linux-gnu-g++)
     endif()
+    set(chromium_llvm_bin
+      ${libwebrtc_source_dir}/src/third_party/llvm-build/Release+Asserts/bin
+    )
+    set_property(TARGET ${MODULE} APPEND_STRING PROPERTY LINK_FLAGS
+      " -B${chromium_llvm_bin} -fuse-ld=lld"
+    )
   else()
     set(chromium_llvm_bin
       ${libwebrtc_source_dir}/src/third_party/llvm-build/Release+Asserts/bin
     )
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-      target_compile_options(${MODULE} PRIVATE
-        -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
-      )
-    endif()
+    target_compile_options(${MODULE} PRIVATE
+      -B${libwebrtc_source_dir}/src/third_party/binutils/Linux_x64/Release/bin
+    )
     # WebRTC's pinned Clang can emit LLVM objects that GNU ld/collect2 cannot
     # consume.
     # Use the matching Chromium lld while retaining the system libstdc++ ABI.

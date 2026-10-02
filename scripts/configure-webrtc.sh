@@ -18,7 +18,7 @@ cd ${SOURCE_DIR}
 if [ "$(uname)" == "Linux" ]; then
 if [ "${TARGET_ARCH:-}" == "arm" ]; then
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=arm
-elif [ "${TARGET_ARCH:-}" == "arm64" ] || [ "$(uname -m)" == "aarch64" ] || [ "$(uname -m)" == "arm64" ]; then
+elif [ "${TARGET_ARCH:-}" == "arm64" ]; then
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=arm64
 else
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
