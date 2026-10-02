@@ -49,6 +49,9 @@ x64/arm64, and Windows x64. N-API keeps those binaries ABI-compatible across
 supported Node.js versions. Other platform and architecture combinations can
 use the [source build](docs/build-from-source.md).
 
+The next release also provides Linux ARM64 binaries for native ARM servers,
+containers, and single-board computers.
+
 Migration to v0.7
 -----------------
 

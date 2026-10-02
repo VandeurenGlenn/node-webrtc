@@ -154,7 +154,7 @@ jobs:
           echo "::warning::npm audit service remained unavailable after 3 attempts"
 
   source-build:
-    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    name: ${{ matrix.label || matrix.os }} / node ${{ matrix.node }}
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.source_build == 'true' }}
     needs: changes
     runs-on: ${{ matrix.os }}
@@ -165,6 +165,23 @@ jobs:
         include:
           - os: ubuntu-latest
             node: 26
+            run_wpt: true
+            cross_compile: false
+            generator: Ninja
+            webrtc_config: cmake/webrtc-linux.cmake
+            script_suffix: sh
+            platform_patch_1: cmake/webrtc-linux.cmake
+            platform_patch_2: cmake/webrtc-linux.cmake
+            legacy_artifact: ""
+          - os: ubuntu-latest
+            label: ubuntu-latest (linux arm64 cross)
+            node: 26
+            run_wpt: false
+            cross_compile: true
+            target_arch: arm64
+            arm_tools_path: /usr
+            artifact_os: Linux
+            artifact_arch: ARM64
             generator: Ninja
             webrtc_config: cmake/webrtc-linux.cmake
             script_suffix: sh
@@ -173,6 +190,7 @@ jobs:
             legacy_artifact: ""
           - os: windows-2022
             node: 26
+            cross_compile: false
             generator: Ninja
             webrtc_config: cmake/webrtc-windows.cmake
             script_suffix: bat
@@ -181,6 +199,7 @@ jobs:
             legacy_artifact: ""
           - os: macos-latest
             node: 26
+            cross_compile: false
             generator: Ninja
             webrtc_config: cmake/webrtc-macos.cmake
             script_suffix: sh
@@ -189,6 +208,7 @@ jobs:
             legacy_artifact: ""
           - os: macos-15-intel
             node: 26
+            cross_compile: false
             timeout_minutes: 120
             generator: Ninja
             webrtc_config: cmake/webrtc-macos.cmake
@@ -243,6 +263,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
 
+      - name: Install Linux ARM64 cross compiler
+        if: matrix.cross_compile == true
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install ninja
@@ -252,7 +276,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_BASE: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
+          ARTIFACT_BASE: libwebrtc-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
           LEGACY_ARTIFACT_NAME: ${{ matrix.legacy_artifact }}
         run: |
           ARTIFACT_NAME="$ARTIFACT_BASE-${ImageOS:-unknown}"
@@ -343,8 +367,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_BASE: native-addon-${{ runner.os }}-${{ runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
-          PRODUCER_JOB: ${{ matrix.os }} / node ${{ matrix.node }}
+          ARTIFACT_BASE: native-addon-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
+          PRODUCER_JOB: ${{ matrix.label || matrix.os }} / node ${{ matrix.node }}
         run: |
           artifact_name="$ARTIFACT_BASE-${ImageOS:-unknown}"
           run_id=""
@@ -406,8 +430,10 @@ jobs:
       - name: Compile native addon
         if: steps.native-addon.outputs.run-id == ''
         env:
+          ARM_TOOLS_PATH: ${{ matrix.arm_tools_path }}
           CMAKE_GENERATOR: ${{ matrix.generator }}
           SKIP_DOWNLOAD: true
+          TARGET_ARCH: ${{ matrix.target_arch }}
           USE_CLANG_CL: 1
           WEBRTC_PREBUILT: ${{ steps.prebuilt.outputs.run-id != '' && '1' || '0' }}
         run: npm run build
@@ -428,43 +454,49 @@ jobs:
           retention-days: 30
 
       - name: Smoke load addon
+        if: matrix.cross_compile != true
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"
 
       - name: Install test dependencies
+        if: matrix.cross_compile != true
         run: npm install --ignore-scripts
 
       - name: Run native test suite
+        if: matrix.cross_compile != true
         run: npm test
 
       - name: Setup minimum supported Node.js
+        if: matrix.cross_compile != true
         uses: actions/setup-node@v7
         with:
           node-version: 24.15
 
       - name: Verify minimum supported Node.js
+        if: matrix.cross_compile != true
         run: node -e "const wrtc=require('./'); const pc=new wrtc.RTCPeerConnection(); pc.close(); console.log('wrtc ok on', process.version);"
 
       - name: Restore build Node.js
+        if: matrix.cross_compile != true
         uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 
       - name: Setup Web Platform Test Python
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         uses: actions/setup-python@v6
         with:
           # The pinned WPT snapshot still imports collections.MutableMapping.
           python-version: '3.9'
 
       - name: Initialize Web Platform Tests
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         run: |
           npm run wpt:init
           node scripts/patch-wpt-python3.js
 
       - name: Configure Web Platform Test hosts
         id: wpt-hosts
-        if: runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         continue-on-error: true
         working-directory: test/web-platform-tests/tests
         run: |
@@ -473,12 +505,12 @@ jobs:
 
       - name: Run Web Platform Tests
         id: wpt
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
         run: npm run wpt:test
 
       - name: Generate WPT badge status
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         shell: bash
         env:
           WPT_HOSTS_OUTCOME: ${{ steps.wpt-hosts.outcome }}
@@ -516,7 +548,7 @@ jobs:
           ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve WPT badge status
-        if: always() && runner.os == 'Linux' && needs.changes.outputs.wpt == 'true'
+        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: wpt-status
@@ -525,12 +557,12 @@ jobs:
           retention-days: 90
 
       - name: Benchmark smoke
-        if: needs.changes.outputs.performance == 'true'
+        if: matrix.cross_compile != true && needs.changes.outputs.performance == 'true'
         run: node benchmarks/run.js --iterations 1 --warmup 0 --messages 5
 
       - name: Find benchmark baseline
         id: benchmark-baseline
-        if: needs.changes.outputs.performance == 'true'
+        if: matrix.cross_compile != true && needs.changes.outputs.performance == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -596,7 +628,7 @@ jobs:
           echo "No platform baseline found; this run will establish one"
 
       - name: Run stable benchmarks
-        if: needs.changes.outputs.performance == 'true'
+        if: matrix.cross_compile != true && needs.changes.outputs.performance == 'true'
         shell: bash
         env:
           BASELINE_PATH: ${{ steps.benchmark-baseline.outputs.path }}
@@ -628,7 +660,7 @@ jobs:
             "${baseline_args[@]}"
 
       - name: Preserve benchmark result
-        if: needs.changes.outputs.performance == 'true'
+        if: matrix.cross_compile != true && needs.changes.outputs.performance == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: benchmark-${{ runner.os }}-${{ runner.arch }}
@@ -637,22 +669,115 @@ jobs:
           retention-days: 90
 
       - name: Package native addon
+        env:
+          TARGET_ARCH: ${{ matrix.target_arch }}
+          TARGET_PLATFORM: ${{ matrix.cross_compile == true && 'linux' || '' }}
         run: npm run package-native-addon
 
-      - name: Preserve tested native addon
+      - name: Preserve native addon
         uses: actions/upload-artifact@v7
         with:
-          name: wrtc-${{ runner.os }}-${{ runner.arch }}
+          name: wrtc-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}
           path: build/stage/**/*.tar.gz
           if-no-files-found: error
 
       - name: Preserve content-addressed native addon
+        if: matrix.cross_compile != true
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.native-addon.outputs.name }}
           path: build/stage/**/*.tar.gz
           if-no-files-found: error
           retention-days: 30
+
+  linux-arm64-validation:
+    name: ubuntu-24.04-arm / node 26
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.source_build == 'true' }}
+    needs:
+      - changes
+      - source-build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Install Linux runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libasound2-dev libpulse-dev
+
+      - name: Download tested Linux ARM64 addon
+        uses: actions/download-artifact@v7
+        with:
+          name: wrtc-Linux-ARM64
+          path: arm64-addon
+
+      - name: Prepare project implementation
+        shell: bash
+        run: |
+          mkdir -p build
+          addon_archive="$(find arm64-addon -type f -name '*.tar.gz' -print -quit)"
+          tar -xzf "$addon_archive" -C build
+          npm install --ignore-scripts
+
+      - name: Smoke load addon
+        run: node -e "const wrtc=require('./'); const pc=new wrtc.RTCPeerConnection(); pc.close(); console.log('wrtc ok on', process.arch);"
+
+      - name: Run native test suite
+        run: npm test
+
+      - name: Setup minimum supported Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.15
+
+      - name: Verify minimum supported Node.js
+        run: node -e "const wrtc=require('./'); const pc=new wrtc.RTCPeerConnection(); pc.close(); console.log('wrtc ok on', process.version);"
+
+      - name: Name tested ARM64 addon cache
+        id: native-addon-cache
+        shell: bash
+        run: |
+          echo "name=native-addon-Linux-ARM64-node26-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-media-defaults.sh') }}-${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve tested ARM64 addon cache
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.native-addon-cache.outputs.name }}
+          path: arm64-addon/**/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Restore build Node.js
+        if: needs.changes.outputs.performance == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+
+      - name: Run stable benchmarks
+        if: needs.changes.outputs.performance == 'true'
+        run: |
+          node benchmarks/run.js \
+            --iterations 5 \
+            --warmup 1 \
+            --compare-runs 3 \
+            --messages 10 \
+            --output benchmarks/results/Linux-ARM64.json
+
+      - name: Preserve benchmark result
+        if: needs.changes.outputs.performance == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-Linux-ARM64
+          path: benchmarks/results/Linux-ARM64.json
+          if-no-files-found: error
+          retention-days: 90
 
   native-sanitizers:
     name: Linux native sanitizers
@@ -906,6 +1031,7 @@ jobs:
     needs:
       - changes
       - source-build
+      - linux-arm64-validation
       - implementation-benchmarks
     runs-on: ubuntu-latest
     steps:
@@ -1076,6 +1202,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (
                   .name == "benchmark-Linux-X64" or
+                  .name == "benchmark-Linux-ARM64" or
                   .name == "benchmark-Windows-X64" or
                   .name == "benchmark-macOS-X64" or
                   .name == "benchmark-macOS-ARM64" or
@@ -1083,7 +1210,9 @@ jobs:
                   .name == "wpt-status"
                 ))] | length'
             )"
-            if [ "$artifact_count" -eq 6 ]; then
+            expected_artifacts="$(node --input-type=module -e \
+              'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length + 2)')"
+            if [ "$artifact_count" -eq "$expected_artifacts" ]; then
               benchmark_run_id="$run_id"
               break
             fi
@@ -1197,6 +1326,8 @@ jobs:
         run: |
           tag_tree="$(git rev-parse 'HEAD^{tree}')"
           build_run_id=""
+          expected_platforms="$(node --input-type=module -e \
+            'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length)')"
 
           while IFS=$'\t' read -r run_id head_sha; do
             candidate_tree="$(
@@ -1209,9 +1340,9 @@ jobs:
 
             successful_build_jobs="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
-                --jq '[.jobs[] | select(.conclusion == "success" and (.name == "ubuntu-latest / node 26" or .name == "windows-2022 / node 26" or .name == "macos-latest / node 26" or .name == "macos-15-intel / node 26")) | .name] | unique | length'
+                --jq '[.jobs[] | select(.conclusion == "success" and (.name == "ubuntu-latest / node 26" or .name == "ubuntu-24.04-arm / node 26" or .name == "windows-2022 / node 26" or .name == "macos-latest / node 26" or .name == "macos-15-intel / node 26")) | .name] | unique | length'
             )"
-            if [ "$successful_build_jobs" -ne 4 ]; then
+            if [ "$successful_build_jobs" -ne "$expected_platforms" ]; then
               continue
             fi
 
@@ -1219,7 +1350,7 @@ jobs:
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
                 --jq '[.artifacts[] | select(.expired == false and (.name | startswith("wrtc-")))] | length'
             )"
-            if [ "$artifact_count" -eq 4 ]; then
+            if [ "$artifact_count" -eq "$expected_platforms" ]; then
               build_run_id="$run_id"
               break
             fi
@@ -1234,7 +1365,7 @@ jobs:
           )
 
           if [ -z "$build_run_id" ]; then
-            echo "No PR run with four successful platform jobs and live artifacts matches tree $tag_tree" >&2
+            echo "No PR run with $expected_platforms successful platform jobs and live artifacts matches tree $tag_tree" >&2
             exit 1
           fi
 
@@ -1254,8 +1385,10 @@ jobs:
           fi
 
           asset_count="$(find release-assets -type f -name '*.tar.gz' | wc -l | tr -d ' ')"
-          if [ "$asset_count" -ne 4 ]; then
-            echo "Expected 4 native archives, found $asset_count" >&2
+          expected_platforms="$(node --input-type=module -e \
+            'import { nativePlatforms } from "./scripts/native-platforms.js"; console.log(nativePlatforms.length)')"
+          if [ "$asset_count" -ne "$expected_platforms" ]; then
+            echo "Expected $expected_platforms native archives, found $asset_count" >&2
             find release-assets -type f -print
             exit 1
           fi

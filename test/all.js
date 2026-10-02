@@ -14,6 +14,7 @@ require("./get-configuration");
 require("./i420helpers");
 require("./iceservers");
 require("./mediastream");
+require("./native-platforms");
 require("./pass-interface-to-method");
 require("./process-exit");
 require("./rollback");

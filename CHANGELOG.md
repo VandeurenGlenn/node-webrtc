@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+New Features
+------------
+
+- Add an official Linux ARM64 native package and release build.
+
 Bug Fixes
 ---------
 
