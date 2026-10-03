@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import os
+import subprocess
 import sys
 
 
@@ -37,23 +38,40 @@ else:
     print(f"Patched {header} for system C++ standard libraries")
 
 if os.environ.get("TARGET_ARCH") in {"arm", "arm64"}:
-    # Chromium's Bullseye ARM sysroot uses a libstdc++ version from before
-    # std::make_unique_for_overwrite. Keep the original uninitialized allocation
-    # semantics without requiring Chromium's bundled libc++ in the Node addon.
-    buffer_source = source_root / "rtc_base/copy_on_write_buffer.cc"
-    if not buffer_source.is_file():
-        raise SystemExit(f"missing WebRTC source: {buffer_source}")
+    # Use the addon's cross-GCC C++ headers instead of Bullseye's GCC 10
+    # headers, which lack C++20 library features required by M154. Keep the
+    # Chromium sysroot for C headers and libraries, and leave host tools alone.
+    arch = os.environ["TARGET_ARCH"]
+    triple = "aarch64-linux-gnu" if arch == "arm64" else "arm-linux-gnueabihf"
+    tools = Path(os.environ.get("ARM_TOOLS_PATH", "/usr"))
+    compiler = tools / "bin" / f"{triple}-g++"
+    version = subprocess.check_output(
+        [str(compiler), "-dumpversion"], text=True
+    ).strip()
+    includes = tools / triple / "include" / "c++" / version
+    include_dirs = [includes, includes / triple, includes / "backward"]
+    for directory in include_dirs:
+        if not directory.is_dir():
+            raise SystemExit(f"missing cross-GCC C++ headers: {directory}")
 
-    content = buffer_source.read_text()
-    old_allocation = "std::make_unique_for_overwrite<uint8_t[]>(size)"
-    compatible_allocation = "std::unique_ptr<uint8_t[]>(new uint8_t[size])"
-
-    if compatible_allocation in content:
-        print(f"ARM sysroot compatibility already applied to {buffer_source}")
-    elif old_allocation in content:
-        buffer_source.write_text(
-            content.replace(old_allocation, compatible_allocation, 1)
+    config = source_root / "build/config/compiler/BUILD.gn"
+    content = config.read_text()
+    marker = "  # node-webrtc cross-GCC C++ headers"
+    if marker not in content:
+        anchor = 'config("compiler") {\n'
+        start = content.index(anchor)
+        position = content.index("  cflags_cc = []\n", start)
+        position += len("  cflags_cc = []\n")
+        flags = ["-nostdinc++"]
+        for directory in include_dirs:
+            flags.extend(["-isystem", directory.as_posix()])
+        flag_lines = "\n".join(f'      "{flag}",' for flag in flags)
+        addition = (
+            f'{marker}\n  if (is_linux && current_cpu == "{arch}" && '
+            f'!use_custom_libcxx) {{\n    cflags_cc += [\n{flag_lines}\n'
+            '    ]\n  }\n'
         )
-        print(f"Patched {buffer_source} for the ARM sysroot C++ standard library")
+        config.write_text(content[:position] + addition + content[position:])
+        print(f"Patched {config} to use cross-GCC {version} C++ headers")
     else:
-        raise SystemExit(f"expected overwrite allocation not found in {buffer_source}")
+        print(f"Cross-GCC C++ headers already configured in {config}")
