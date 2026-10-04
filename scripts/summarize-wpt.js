@@ -9,6 +9,7 @@ import jsYaml from "js-yaml";
 
 const require = createRequire(import.meta.url);
 const { Minimatch } = require("minimatch");
+const { summarizeResults } = require("../test/web-platform-tests/result-report.js");
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const wptRoot = path.join(root, "test", "web-platform-tests");
@@ -64,6 +65,10 @@ for (const document of documents) {
       summary.reasons[reason] = (summary.reasons[reason] || 0) + 1;
     }
   }
+}
+
+if (process.argv[3] && fs.existsSync(process.argv[3])) {
+  summary.observed = summarizeResults(JSON.parse(fs.readFileSync(process.argv[3], "utf8")));
 }
 
 const output = `${JSON.stringify(summary, null, 2)}\n`;

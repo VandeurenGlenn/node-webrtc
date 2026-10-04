@@ -507,6 +507,8 @@ jobs:
         id: wpt
         if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
         continue-on-error: true
+        env:
+          WPT_RESULTS_PATH: wpt-status/wpt-results.json
         run: npm run wpt:test
 
       - name: Generate WPT badge status
@@ -517,7 +519,7 @@ jobs:
           WPT_OUTCOME: ${{ steps.wpt.outcome }}
         run: |
           mkdir -p wpt-status
-          node scripts/summarize-wpt.js wpt-status/wpt-summary.json
+          node scripts/summarize-wpt.js wpt-status/wpt-summary.json wpt-status/wpt-results.json
           if [ "$WPT_HOSTS_OUTCOME" != "success" ]; then
             status="setup error"
             color=orange
@@ -532,9 +534,10 @@ jobs:
             const fs = require("fs");
             const summary = require("./wpt-status/wpt-summary.json");
             const status = process.argv[1];
-            const message = status === "passing"
-              ? `${summary.expectedPass} pass · ${summary.expectedFail} xfail · ${summary.skipped} skip`
-              : `${status} · ${summary.expectedFail} xfail · ${summary.skipped} skip`;
+            const observed = summary.observed;
+            const message = observed
+              ? `${observed.pass} pass · ${observed.fail} fail · ${observed.timeout} timeout · ${observed.skippedFiles} files skipped${status === "passing" ? "" : ` · ${status}`}`
+              : `${status} · subtest results unavailable`;
             fs.writeFileSync("wpt-status/wpt-badge.json", JSON.stringify({
               schemaVersion: 1,
               label: "WPT",
@@ -545,6 +548,10 @@ jobs:
           node -e '
             const summary = require("./wpt-status/wpt-summary.json");
             console.log(`### WPT plan\n\n- Expected pass: ${summary.expectedPass}\n- Expected fail: ${summary.expectedFail}\n- Skipped: ${summary.skipped}`);
+            if (summary.observed) {
+              const r = summary.observed;
+              console.log(`\n### Actual WPT subtests\n\n- Pass: ${r.pass}\n- Fail (including expected failures): ${r.fail}\n- Timeout: ${r.timeout}\n- Not run: ${r.notRun}\n- Unknown status: ${r.unknown}\n- Harness errors: ${r.harnessErrors}\n- Unhandled exceptions: ${r.exceptions}\n- Completed / pending / skipped files: ${r.completedFiles} / ${r.pendingFiles} / ${r.skippedFiles}\n\nFull failure names and messages: wpt-status/wpt-results.json artifact. A green job means expectations matched, not full conformance.`);
+            }
           ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve WPT badge status

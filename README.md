@@ -19,6 +19,15 @@ macOS, and Windows. WebRTC uses its Chromium Clang toolchain on Linux, Chromium
 `clang-cl` on Windows, and its pinned toolchain on macOS. The addon and WebRTC
 share each platform's standard C++ library ABI.
 
+The WPT badge reports actual subtest passes, failures (including expected
+failures), and timeouts, plus the number of skipped files. A green CI job means
+the recorded expectations matched; it does **not** mean every WPT passed.
+Download the `wpt-status` Actions artifact for `wpt-results.json`, including
+individual failure names/messages, harness errors, and pending files if a run
+was interrupted. The current suite uses a pinned legacy WPT snapshot and a
+jsdom harness, not a full browser; browser-only skips are not evidence of native
+WebRTC conformance. Snapshot modernization is a separate follow-up.
+
 Node.js 24.15 or newer is required. The package uses the platform-provided
 `DOMException` instead of the deprecated userland polyfill.
 

@@ -10,7 +10,7 @@ const wrtc = require('../..');
 
 const reporterPathname = '/resources/testharnessreport.js';
 
-module.exports = urlPrefixFactory => {
+module.exports = (urlPrefixFactory, report) => {
   if (inBrowserContext()) {
     return () => {
       // TODO: browser support for running WPT
@@ -21,7 +21,7 @@ module.exports = urlPrefixFactory => {
     it(title, function() {
       this.timeout(70000);
       this.slow(10000);
-      return createJSDOM(urlPrefixFactory(), testPath, expectFail);
+      return createJSDOM(urlPrefixFactory(), testPath, expectFail, report);
     });
   };
 };
@@ -47,22 +47,21 @@ const resourceInterceptor = requestInterceptor(async request => {
   return undefined;
 });
 
-function createJSDOM(urlPrefix, testPath, expectFail) {
+function createJSDOM(urlPrefix, testPath, expectFail, report) {
   const unhandledExceptions = [];
-  const doneErrors = [];
 
   let allowUnhandledExceptions = false;
 
   const virtualConsole = new VirtualConsole().forwardTo(console, { jsdomErrors: 'none' });
   virtualConsole.on('jsdomError', e => {
-    if (e.type === 'unhandled exception' && !allowUnhandledExceptions) {
+    if (['unhandled exception', 'unhandled-exception'].includes(e.type) && !allowUnhandledExceptions) {
       unhandledExceptions.push(e);
 
       // Some failing tests make a lot of noise.
       // There's no need to log these messages
       // for errors we're already aware of.
       if (!expectFail) {
-        console.error(e.detail.stack);
+        console.error((e.cause || e.detail || e).stack);
       }
     }
   });
@@ -123,16 +122,24 @@ function createJSDOM(urlPrefix, testPath, expectFail) {
           });
 
           window.add_completion_callback((tests, harnessStatus) => {
+            report?.complete(testPath, tests.map(test => ({
+              name: test.name,
+              status: test.status,
+              message: test.message || null,
+              stack: test.stack || null
+            })), {
+              status: harnessStatus.status,
+              message: harnessStatus.message || null
+            }, unhandledExceptions);
             // This needs to be delayed since some tests do things even after calling done().
             process.nextTick(() => {
               window.close();
             });
 
-            if (harnessStatus.status === 2) {
-              errors.push(new Error(`test harness should not timeout: ${testPath}`));
+            if (harnessStatus.status !== 0) {
+              errors.push(new Error(`test harness error (${harnessStatus.status}): ${testPath}: ${harnessStatus.message || ''}`));
             }
 
-            errors.push(...doneErrors);
             errors.push(...unhandledExceptions);
 
             if (errors.length === 0 && expectFail) {
