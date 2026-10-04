@@ -1,0 +1,89 @@
+name: Windows performance A/B
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [develop]
+    paths:
+      - .github/workflows/windows-performance-ab.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  compare:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - name: Install benchmark dependencies
+        run: npm install --ignore-scripts
+      - name: Download verified Windows binaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ab/release ab/batching ab/ownership ab/combined
+          gh release download v0.7.2 --repo "$GITHUB_REPOSITORY" \
+            --pattern wrtc-v0.7.2-napi-v3-win32-x64.tar.gz --dir ab/release
+          # Successful PR runs #42, #43 (independent of #42), and #44.
+          for variant in batching:37221720442 ownership:37223039789 combined:37225283266; do
+            name="${variant%%:*}"
+            run_id="${variant##*:}"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+              --name wrtc-Windows-X64 --dir "ab/$name"
+          done
+          for name in release batching ownership combined; do
+            archive="$(find "ab/$name" -name '*.tar.gz' -print -quit)"
+            test -n "$archive"
+            tar -xzf "$archive" -C "ab/$name"
+          done
+      - name: Compare isolated changes on the same runner
+        shell: bash
+        run: |
+          mkdir -p ab/results
+          for name in batching ownership combined; do
+            node benchmarks/run-paired.js \
+              --baseline-addon ab/release/Release/wrtc.node \
+              --baseline-ref v0.7.2 \
+              --candidate-addon "ab/$name/Release/wrtc.node" \
+              --pairs 10 --iterations 10 --warmup 2 \
+              --throughput-messages 10000 \
+              --scenario datachannel_text_throughput_messages_per_second \
+              --scenario datachannel_binary_throughput_mib_per_second \
+              --scenario datachannel_unordered_unreliable_rtt_ms \
+              --output "ab/results/$name.json"
+          done
+      - name: Summarize A/B measurements
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const rows = [
+            '# Windows A/B versus v0.7.2',
+            '',
+            'Ten alternating pairs per variant on one runner. Throughput: positive is better. RTT: negative is better. Intervals crossing zero are inconclusive.',
+            '',
+            '| Variant | Metric | Change | 95% interval | Evidence |',
+            '| --- | --- | ---: | --- | --- |',
+          ];
+          for (const variant of ['batching', 'ownership', 'combined']) {
+            const result = JSON.parse(readFileSync(`ab/results/${variant}.json`, 'utf8'));
+            for (const [metric, value] of Object.entries(result.comparison)) {
+              rows.push(`| ${variant} | ${metric} | ${value.deltaPercent}% | ${value.confidenceLowPercent}% to ${value.confidenceHighPercent}% | ${value.significant ? 'Significant' : 'Inconclusive'} |`);
+            }
+          }
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${rows.join('\n')}\n`);
+          JS
+      - name: Preserve measurements
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-performance-ab
+          path: ab/results/*.json
+          if-no-files-found: warn
+          retention-days: 90
