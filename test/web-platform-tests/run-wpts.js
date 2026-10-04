@@ -6,6 +6,7 @@ const { Minimatch } = require('minimatch');
 const { before, describe, it } = require('mocha');
 const { readManifest, getPossibleTestFilePaths, stripPrefix } = require('./wpt-manifest-utils.js');
 const startWPTServer = require('./start-wpt-server.js');
+const { createReport } = require('./result-report.js');
 
 const validReasons = new Set([
   'fail',
@@ -33,7 +34,12 @@ const minimatchers = new Map();
 checkToRun();
 
 let wptServerURL;
-const runSingleWPT = require('./run-single-wpt.js')(() => wptServerURL);
+const report = createReport(process.env.WPT_RESULTS_PATH || path.resolve('build/wpt-results.json'), {
+  node: process.version,
+  commit: process.env.GITHUB_SHA || null,
+  timestamp: new Date().toISOString()
+});
+const runSingleWPT = require('./run-single-wpt.js')(() => wptServerURL, report);
 before(function() {
   this.timeout(30 * 1000);
   return startWPTServer({ toUpstream: false }).then(url => {
@@ -57,6 +63,9 @@ describe('web-platform-tests', () => {
           const expectFail = (reason === 'fail') ||
                              (reason === 'needs-node10' && !hasNode10) ||
                              (reason === 'needs-node11' && !hasNode11);
+
+          report.plan(testFilePath, shouldSkip ? 'skip' : expectFail ? 'fail' : 'pass',
+            matchingPattern ? toRunDoc[matchingPattern][1] : null);
 
           if (matchingPattern && shouldSkip) {
             it.skip(`[${reason}] ${testFile}`);
