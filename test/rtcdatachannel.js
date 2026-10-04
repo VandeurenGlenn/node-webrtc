@@ -3,6 +3,43 @@
 const tape = require('./lib/test');
 const { JSDOM } = require('jsdom');
 const { RTCDataChannel, RTCPeerConnection } = require('..');
+const { createRTCPeerConnections, negotiate } = require('./lib/pc');
+
+tape('closing during binary delivery releases pending message events safely', async t => {
+  for (let round = 0; round < 5; round += 1) {
+    const [sender, receiver] = createRTCPeerConnections();
+    try {
+      const outgoing = sender.createDataChannel('close-during-burst');
+      const opened = new Promise(resolve => {
+        outgoing.onopen = resolve;
+      });
+      const delivered = new Promise((resolve, reject) => {
+        receiver.ondatachannel = ({ channel }) => {
+          channel.onmessage = ({ data }) => {
+            try {
+              t.equal(new Uint8Array(data)[0], round, 'payload survives async delivery');
+              receiver.close();
+              sender.close();
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          };
+        };
+      });
+      await negotiate(sender, receiver);
+      await opened;
+      const payload = new Uint8Array(1024).fill(round);
+      for (let i = 0; i < 256; i += 1) outgoing.send(payload);
+      await delivered;
+      await new Promise(resolve => setImmediate(resolve));
+    } finally {
+      sender.close();
+      receiver.close();
+    }
+  }
+  t.end();
+});
 
 tape('.send() normalizes jsdom Blob and cross-realm ArrayBuffer values', async t => {
   const { window } = new JSDOM('', { runScripts: 'dangerously' });

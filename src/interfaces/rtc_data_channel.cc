@@ -44,6 +44,21 @@ constexpr const char* kMessageDispatchMethod = "dispatchEvent";
 
 }  // namespace
 
+// Queued messages must own their buffers even if shutdown discards the event
+// before dispatch. Avoid the generic std::function wrapper on this hot path.
+class RTCDataChannel::MessageEvent final: public Event<RTCDataChannel> {
+ public:
+  explicit MessageEvent(const webrtc::DataBuffer& buffer)
+    : _buffer(std::make_unique<webrtc::DataBuffer>(buffer)) {}
+
+  void Dispatch(RTCDataChannel& channel) override {
+    RTCDataChannel::HandleOwnedMessage(channel, _buffer.release());
+  }
+
+ private:
+  std::unique_ptr<webrtc::DataBuffer> _buffer;
+};
+
 Napi::FunctionReference& RTCDataChannel::constructor() {
   static Napi::FunctionReference constructor;
   return constructor;
@@ -71,10 +86,7 @@ void DataChannelObserver::OnStateChange() {
 }
 
 void DataChannelObserver::OnMessage(const webrtc::DataBuffer& buffer) {
-  auto* ownedBuffer = new webrtc::DataBuffer(buffer);
-  Enqueue(Callback1<RTCDataChannel>::Create([ownedBuffer](RTCDataChannel & channel) {
-    RTCDataChannel::HandleOwnedMessage(channel, ownedBuffer);
-  }));
+  Enqueue(std::make_unique<RTCDataChannel::MessageEvent>(buffer));
 }
 
 static void requeue(DataChannelObserver& observer, RTCDataChannel& channel) {
@@ -185,10 +197,7 @@ void RTCDataChannel::HandleStateChange(RTCDataChannel& channel, webrtc::DataChan
 }
 
 void RTCDataChannel::OnMessage(const webrtc::DataBuffer& buffer) {
-  auto* ownedBuffer = new webrtc::DataBuffer(buffer);
-  Dispatch(CreateCallback<RTCDataChannel>([this, ownedBuffer]() {
-    RTCDataChannel::HandleOwnedMessage(*this, ownedBuffer);
-  }));
+  Dispatch(std::make_unique<MessageEvent>(buffer));
 }
 
 void RTCDataChannel::HandleMessage(RTCDataChannel& channel, const webrtc::DataBuffer& buffer) {
