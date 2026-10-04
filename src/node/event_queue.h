@@ -23,6 +23,16 @@ namespace node_webrtc {
 template <typename T>
 class EventQueue {
  public:
+  using Batch = std::queue<std::unique_ptr<Event<T>>>;
+
+  // Transfer ownership while holding the lock once; callbacks run outside it.
+  Batch TakeAll() {
+    Batch events;
+    std::lock_guard<std::mutex> lock(_mutex);
+    events.swap(_events);
+    return events;
+  }
+
   /**
    * Enqueue an Event.
    * @param event the event to enqueue
@@ -53,7 +63,7 @@ class EventQueue {
   }
 
  private:
-  std::queue<std::unique_ptr<Event<T>>> _events;
+  Batch _events;
   std::mutex _mutex{};
 };
 

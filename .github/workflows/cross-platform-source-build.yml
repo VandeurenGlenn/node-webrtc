@@ -842,6 +842,11 @@ jobs:
           export LD_PRELOAD="$(cc -print-file-name=libasan.so)"
           npm test
 
+      - name: Verify concurrent event queue batches
+        run: |
+          c++ -std=c++20 -pthread -fsanitize=address,undefined -I. test/event-queue.cc -o "$RUNNER_TEMP/event-queue-test"
+          "$RUNNER_TEMP/event-queue-test"
+
   linux-performance-profile:
     name: Linux DataChannel performance profile
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.performance == 'true' }}

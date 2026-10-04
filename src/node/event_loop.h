@@ -56,11 +56,24 @@ class EventLoop: private EventQueue<T> {
   virtual void Run() {
     Napi::HandleScope scope(_env);
     while (!_should_stop) {
-      while (auto event = this->Dequeue()) {
-        Napi::CallbackScope callbackScope(_env, *_context);
-        event->Dispatch(_target);
-        if (_should_stop) {
-          break;
+      if (_coalesce_events) {
+        auto events = this->TakeAll();
+        while (!events.empty()) {
+          auto event = std::move(events.front());
+          events.pop();
+          Napi::CallbackScope callbackScope(_env, *_context);
+          event->Dispatch(_target);
+          if (_should_stop) {
+            break;
+          }
+        }
+      } else {
+        while (auto event = this->Dequeue()) {
+          Napi::CallbackScope callbackScope(_env, *_context);
+          event->Dispatch(_target);
+          if (_should_stop) {
+            break;
+          }
         }
       }
 
