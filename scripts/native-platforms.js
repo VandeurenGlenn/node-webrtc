@@ -11,6 +11,11 @@ export const nativePlatforms = [
   },
   {
     platform: "linux",
+    arch: "arm64",
+    packageName: "@vandeurenglenn/wrtc-linux-arm64",
+  },
+  {
+    platform: "linux",
     arch: "x64",
     packageName: "@vandeurenglenn/wrtc-linux-x64",
   },

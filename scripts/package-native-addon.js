@@ -13,9 +13,11 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const buildDirectory = join(root, "build");
 const addon = join(buildDirectory, "Release", "wrtc.node");
 const stage = join(buildDirectory, "stage");
+const targetPlatform = process.env.TARGET_PLATFORM || process.platform;
+const targetArch = process.env.TARGET_ARCH || process.arch;
 const archive = join(
   stage,
-  `wrtc-v${packageJson.version}-napi-v3-${process.platform}-${process.arch}.tar.gz`,
+  `wrtc-v${packageJson.version}-napi-v3-${targetPlatform}-${targetArch}.tar.gz`,
 );
 
 if (!existsSync(addon)) {

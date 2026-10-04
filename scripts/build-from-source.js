@@ -4,6 +4,7 @@
 import { spawnSync } from "child_process";
 import { createRequire } from "module";
 import { fileURLToPath } from "url";
+import { join } from "path";
 
 const args = ["configure"];
 const require = createRequire(import.meta.url);
@@ -38,6 +39,14 @@ if (process.platform === "linux") {
     buildEnv.CXXFLAGS = cxxflags
       ? cxxflags + " " + disableAvailability
       : disableAvailability;
+  }
+  const tools = process.env.ARM_TOOLS_PATH || "/usr";
+  if (process.env.TARGET_ARCH === "arm64") {
+    buildEnv.CC = join(tools, "bin", "aarch64-linux-gnu-gcc");
+    buildEnv.CXX = join(tools, "bin", "aarch64-linux-gnu-g++");
+  } else if (process.env.TARGET_ARCH === "arm") {
+    buildEnv.CC = join(tools, "bin", "arm-linux-gnueabihf-gcc");
+    buildEnv.CXX = join(tools, "bin", "arm-linux-gnueabihf-g++");
   }
 }
 

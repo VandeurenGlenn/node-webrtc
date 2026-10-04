@@ -16,9 +16,13 @@ fi
 cd ${SOURCE_DIR}
 
 if [ "$(uname)" == "Linux" ]; then
-if [ "$TARGET_ARCH" == "arm" ]; then
+if [ "${TARGET_ARCH:-}" == "arm" ]; then
+  # Cross-built Rust host tools still require the x64 host sysroot.
+  "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=arm
-elif [ "$TARGET_ARCH" == "arm64" ]; then
+elif [ "${TARGET_ARCH:-}" == "arm64" ]; then
+  # Cross-built Rust host tools still require the x64 host sysroot.
+  "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=arm64
 else
   "$PYTHON_BIN" build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
