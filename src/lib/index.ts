@@ -5,11 +5,13 @@ import { inherits } from "util";
 import binding from "./binding.js";
 import EventTarget from "./eventtarget.js";
 import MediaDevices from "./mediadevices.js";
+import MediaStreamTrackEvent from "./mediastreamtrackevent.js";
 import RTCDataChannelEvent from "./datachannelevent.js";
 import RTCIceCandidate from "./icecandidate.js";
 import RTCPeerConnection from "./peerconnection.js";
 import RTCPeerConnectionIceEvent from "./rtcpeerconnectioniceevent.js";
 import RTCSessionDescription from "./sessiondescription.js";
+import RTCTrackEvent from "./rtctrackevent.js";
 
 const {
   MediaStream,
@@ -157,6 +159,8 @@ export {
   RTCRtpTransceiver,
   RTCSctpTransport,
   RTCSessionDescription,
+  RTCTrackEvent,
+  MediaStreamTrackEvent,
   getUserMedia,
   mediaDevices,
   nonstandard,

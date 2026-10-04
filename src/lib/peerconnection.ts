@@ -9,6 +9,7 @@ import RTCIceCandidate from "./icecandidate.js";
 import RTCPeerConnectionIceEvent from "./rtcpeerconnectioniceevent.js";
 import RTCPeerConnectionIceErrorEvent from "./rtcpeerconnectioniceerrorevent.js";
 import RTCSessionDescription from "./sessiondescription.js";
+import RTCTrackEvent from "./rtctrackevent.js";
 
 function getCachedSessionDescription(self, key, description) {
   const cache =
@@ -182,14 +183,14 @@ function RTCPeerConnection() {
   // Attach events to the native PeerConnection object
   //
   pc.ontrack = function ontrack(receiver, streams, transceiver) {
-    self.dispatchEvent({
-      type: "track",
+    const event = new RTCTrackEvent("track", {
       track: receiver.track,
       receiver: receiver,
       streams: streams,
       transceiver: transceiver,
-      target: self,
     });
+    Object.defineProperty(event, "target", { value: self, enumerable: true });
+    self.dispatchEvent(event);
   };
 
   pc.onconnectionstatechange = function onconnectionstatechange() {
@@ -198,12 +199,11 @@ function RTCPeerConnection() {
 
   pc.onicecandidate = function onicecandidate(candidate) {
     var icecandidate = new RTCIceCandidate(candidate);
-    self.dispatchEvent(
-      new RTCPeerConnectionIceEvent("icecandidate", {
-        candidate: icecandidate,
-        target: self,
-      }),
-    );
+    const event = new RTCPeerConnectionIceEvent("icecandidate", {
+      candidate: icecandidate,
+    });
+    Object.defineProperty(event, "target", { value: self, enumerable: true });
+    self.dispatchEvent(event);
   };
 
   pc.onicecandidateerror = function onicecandidateerror(eventInitDict) {
@@ -234,12 +234,11 @@ function RTCPeerConnection() {
       self.iceGatheringState === "complete" &&
       self.connectionState !== "closed"
     ) {
-      self.dispatchEvent(
-        new RTCPeerConnectionIceEvent("icecandidate", {
-          candidate: null,
-          target: self,
-        }),
-      );
+      const event = new RTCPeerConnectionIceEvent("icecandidate", {
+        candidate: null,
+      });
+      Object.defineProperty(event, "target", { value: self, enumerable: true });
+      self.dispatchEvent(event);
     }
   };
 
