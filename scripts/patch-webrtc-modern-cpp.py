@@ -38,6 +38,18 @@ else:
     print(f"Patched {header} for system C++ standard libraries")
 
 if os.environ.get("TARGET_ARCH") in {"arm", "arm64"}:
+    # GCC 13 cannot compare heterogeneous std::pair keys. Materialize the
+    # URI as the map's string key for the two RTP extension lookups.
+    picker = source_root / "call/payload_type_picker.cc"
+    content = picker.read_text()
+    old_lookup = "uri_to_id_.find(std::pair{uri, encrypt})"
+    new_lookup = "uri_to_id_.find(std::pair{std::string(uri), encrypt})"
+    if content.count(old_lookup) == 2:
+        picker.write_text(content.replace(old_lookup, new_lookup))
+        print(f"Patched {picker} for GCC 13 pair comparisons")
+    elif content.count(new_lookup) != 2 or old_lookup in content:
+        raise SystemExit(f"expected two RTP extension lookups in {picker}")
+
     # Use the addon's cross-GCC C++ headers instead of Bullseye's GCC 10
     # headers, which lack C++20 library features required by M154. Keep the
     # Chromium sysroot for C headers and libraries, and leave host tools alone.
