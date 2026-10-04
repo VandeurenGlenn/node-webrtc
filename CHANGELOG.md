@@ -1,14 +1,18 @@
-Unreleased
-==========
+0.7.2
+=====
 
 New Features
 ------------
 
 - Add an official Linux ARM64 native package and release build.
+- Validate Linux ARM64 addons on native ARM64 runners before caching and
+  publishing them.
 
 Bug Fixes
 ---------
 
+- Build M154 for Linux ARM64 with the Chromium host toolchain, host and target
+  sysroots, and modern cross-GCC C++ headers.
 - Validate native audio buffer dimensions before allocation and emit sink
   errors instead of silently dropping conversion failures.
 - Preserve fractional RTP maximum frame rates and reject encoding values that
