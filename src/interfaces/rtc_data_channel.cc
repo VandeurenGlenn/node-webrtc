@@ -113,11 +113,16 @@ RTCDataChannel::RTCDataChannel(const Napi::CallbackInfo& info)
   _factory->Ref();
 
   _jingleDataChannel = observer->_jingleDataChannel;
-  _jingleDataChannel->RegisterObserver(this);
+  // Quiesce the temporary observer before transferring its queued events.
+  // WebRTC buffers newly received messages until the replacement registers,
+  // so those messages cannot overtake events already held by the observer.
+  _jingleDataChannel->UnregisterObserver();
   _state.store(_jingleDataChannel->state(), std::memory_order_relaxed);
 
   // Re-queue cached observer events
   requeue(*observer, *this);
+
+  _jingleDataChannel->RegisterObserver(this);
 
   delete observer;
 
