@@ -54,6 +54,8 @@ class RTCDataChannel
   > * wrap();
 
  private:
+  class MessageEvent;
+
   struct AsyncSendState {
     explicit AsyncSendState(RTCDataChannel* channel): channel(channel) {}
 
