@@ -130,7 +130,7 @@ jobs:
 
       - name: Run tooling tests
         run: |
-          node --test test/benchmark-report.js
+          node --test test/benchmark-report.js test/benchmark-provenance.js
           node scripts/summarize-wpt.js "$RUNNER_TEMP/wpt-summary.json"
 
       - name: Audit dependencies
@@ -1106,6 +1106,21 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Record tested benchmark revision
+        shell: bash
+        run: |
+          mkdir -p benchmark-provenance
+          # checkout tests the synthetic PR merge, not workflow_run.head_sha.
+          git rev-parse HEAD > benchmark-provenance/tested-commit.txt
+
+      - name: Preserve benchmark provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-provenance
+          path: benchmark-provenance/
+          if-no-files-found: error
+          retention-days: 90
+
   deploy-benchmark-pages:
     name: Publish benchmark dashboard
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
@@ -1156,18 +1171,36 @@ jobs:
           )
 
           while IFS=$'\t' read -r run_id head_sha; do
-            if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
-              git fetch --no-tags --depth=1 origin "$head_sha"
-            fi
-            if ! git diff --quiet "$head_sha" HEAD -- "${benchmark_paths[@]}"; then
-              continue
-            fi
             report_status="$(
               gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
                 --jq '.jobs[] | select(.name == "Visual benchmark report") | .conclusion' |
               head -n 1
             )"
             if [ "$report_status" != "success" ]; then
+              continue
+            fi
+            # The PR head omits changes from its base that checkout may have
+            # included in the tested merge. Never infer the tested tree from it.
+            tested_sha="$head_sha"
+            provenance_dir="$(mktemp -d "$RUNNER_TEMP/benchmark-provenance.XXXXXX")"
+            if gh run download "$run_id" \
+                --repo "$GITHUB_REPOSITORY" \
+                --name benchmark-provenance \
+                --dir "$provenance_dir"; then
+              tested_sha="$(tr -d '\r\n' < "$provenance_dir/tested-commit.txt")"
+              if [[ ! "$tested_sha" =~ ^[0-9a-f]{40}$ ]]; then
+                echo "Invalid benchmark provenance in run $run_id; skipping" >&2
+                continue
+              fi
+            else
+              echo "Legacy run $run_id has no provenance; checking its PR head conservatively"
+            fi
+            if ! git cat-file -e "$tested_sha^{commit}" 2>/dev/null; then
+              if ! git fetch --no-tags --depth=1 origin "$tested_sha"; then
+                continue
+              fi
+            fi
+            if ! git diff --quiet "$tested_sha" HEAD -- "${benchmark_paths[@]}"; then
               continue
             fi
             artifact_count="$(
