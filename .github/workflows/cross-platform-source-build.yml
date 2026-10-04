@@ -566,66 +566,15 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          BENCHMARK_ARTIFACT: benchmark-${{ runner.os }}-${{ runner.arch }}
-          NATIVE_ARTIFACT: wrtc-${{ runner.os }}-${{ runner.arch }}
-          PRODUCER_JOB: ${{ matrix.os }} / node ${{ matrix.node }}
         run: |
-          mkdir -p benchmarks/ci-baseline
-          develop_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/develop" --jq '.commit.sha')"
-          develop_tree="$(
-            gh api "repos/$GITHUB_REPOSITORY/git/commits/$develop_sha" --jq '.tree.sha'
-          )"
-          while IFS=$'\t' read -r run_id head_sha; do
-            candidate_tree="$(
-              gh api "repos/$GITHUB_REPOSITORY/git/commits/$head_sha" \
-                --jq '.tree.sha' 2>/dev/null || true
-            )"
-            if [ "$candidate_tree" != "$develop_tree" ]; then
-              continue
-            fi
-            producer_status="$(
-              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?filter=latest&per_page=100" \
-                --jq ".jobs[] | select(.name == \"$PRODUCER_JOB\") | .conclusion" |
-              head -n 1
-            )"
-            if [ "$producer_status" != "success" ]; then
-              continue
-            fi
-            if gh run download "$run_id" \
-              --repo "$GITHUB_REPOSITORY" \
-              --name "$BENCHMARK_ARTIFACT" \
-              --dir benchmarks/ci-baseline 2>/dev/null; then
-              baseline_file="$(find benchmarks/ci-baseline -type f -name '*.json' | head -n 1)"
-              if [ -n "$baseline_file" ]; then
-                echo "path=$baseline_file" >> "$GITHUB_OUTPUT"
-                mkdir -p benchmarks/ci-baseline-addon/archive benchmarks/ci-baseline-addon/extracted
-                if gh run download "$run_id" \
-                  --repo "$GITHUB_REPOSITORY" \
-                  --name "$NATIVE_ARTIFACT" \
-                  --dir benchmarks/ci-baseline-addon/archive 2>/dev/null; then
-                  addon_archive="$(find benchmarks/ci-baseline-addon/archive -type f -name '*.tar.gz' | head -n 1)"
-                  if [ -n "$addon_archive" ]; then
-                    tar -xzf "$addon_archive" -C benchmarks/ci-baseline-addon/extracted
-                    baseline_addon="$(find benchmarks/ci-baseline-addon/extracted -type f -name 'wrtc.node' | head -n 1)"
-                    if [ -n "$baseline_addon" ]; then
-                      echo "addon=$baseline_addon" >> "$GITHUB_OUTPUT"
-                    fi
-                  fi
-                fi
-                echo "Using benchmark baseline from merged PR run $run_id"
-                exit 0
-              fi
-            fi
-          done < <(
-            gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow cross-platform-source-build.yml \
-              --event pull_request \
-              --limit 100 \
-              --json databaseId,headSha \
-              --jq '.[] | [.databaseId, .headSha] | @tsv'
-          )
-          echo "No platform baseline found; this run will establish one"
+          # Measure the combined optimizations against the published release.
+          mkdir -p benchmarks/release-baseline
+          release_archive="wrtc-v0.7.2-napi-v3-$(node -p 'process.platform')-$(node -p 'process.arch').tar.gz"
+          gh release download v0.7.2 --repo "$GITHUB_REPOSITORY" \
+            --pattern "$release_archive" --dir benchmarks/release-baseline
+          tar -xzf "benchmarks/release-baseline/$release_archive" -C benchmarks/release-baseline
+          echo "addon=benchmarks/release-baseline/Release/wrtc.node" >> "$GITHUB_OUTPUT"
+          echo "ref=v0.7.2" >> "$GITHUB_OUTPUT"
 
       - name: Run stable benchmarks
         if: matrix.cross_compile != true && needs.changes.outputs.performance == 'true'
@@ -634,14 +583,16 @@ jobs:
           BASELINE_PATH: ${{ steps.benchmark-baseline.outputs.path }}
           BASELINE_ADDON: ${{ steps.benchmark-baseline.outputs.addon }}
           BENCHMARK_OUTPUT: benchmarks/results/${{ runner.os }}-${{ runner.arch }}.json
-          PAIR_BENCHMARKS: ${{ matrix.os != 'macos-15-intel' }}
+          PAIR_BENCHMARKS: 'true'
+          BASELINE_REF: ${{ steps.benchmark-baseline.outputs.ref }}
         run: |
           if [ "$PAIR_BENCHMARKS" = "true" ] && [ -n "$BASELINE_ADDON" ]; then
             node benchmarks/run-paired.js \
               --baseline-addon "$BASELINE_ADDON" \
               --candidate-addon build/Release/wrtc.node \
-              --pairs 3 \
-              --iterations 5 \
+              --baseline-ref "$BASELINE_REF" \
+              --pairs 10 \
+              --iterations 10 \
               --warmup 1 \
               --messages 10 \
               --output "$BENCHMARK_OUTPUT"
@@ -762,11 +713,20 @@ jobs:
 
       - name: Run stable benchmarks
         if: needs.changes.outputs.performance == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          node benchmarks/run.js \
-            --iterations 5 \
+          mkdir -p benchmarks/release-baseline
+          gh release download v0.7.2 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'wrtc-v0.7.2-napi-v3-linux-arm64.tar.gz' --dir benchmarks/release-baseline
+          tar -xzf benchmarks/release-baseline/wrtc-v0.7.2-napi-v3-linux-arm64.tar.gz -C benchmarks/release-baseline
+          node benchmarks/run-paired.js \
+            --baseline-addon benchmarks/release-baseline/Release/wrtc.node \
+            --candidate-addon build/Release/wrtc.node \
+            --baseline-ref v0.7.2 \
+            --pairs 10 \
+            --iterations 10 \
             --warmup 1 \
-            --compare-runs 3 \
             --messages 10 \
             --output benchmarks/results/Linux-ARM64.json
 
