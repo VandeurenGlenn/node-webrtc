@@ -67,7 +67,11 @@ function summarize(results, scenarioName) {
 
 // Student's t critical values for a two-sided 95% interval. Three or more
 // pairs are required so a single lucky runner sample cannot claim a win.
-const tCritical95 = [Infinity, Infinity, 12.706, 4.303, 3.182, 2.776, 2.571];
+const tCritical95 = [
+  Infinity, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262,
+  2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093,
+  2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+];
 
 function compare(candidateResults, baselineResults, scenarioName, threshold) {
   const deltas = candidateResults.map((candidate, index) => {
@@ -77,7 +81,7 @@ function compare(candidateResults, baselineResults, scenarioName, threshold) {
   });
   const deltaPercent = mean(deltas);
   const degreesOfFreedom = deltas.length - 1;
-  const critical = tCritical95[degreesOfFreedom] || 1.96;
+  const critical = tCritical95[Math.min(degreesOfFreedom, 30)];
   const margin = critical * sampleStddev(deltas) / Math.sqrt(deltas.length);
   const confidenceLow = deltaPercent - margin;
   const confidenceHigh = deltaPercent + margin;
@@ -104,6 +108,7 @@ function compare(candidateResults, baselineResults, scenarioName, threshold) {
 }
 
 const args = process.argv.slice(2);
+const baselineRef = takeOption(args, "--baseline-ref");
 const baselineAddonOption = takeOption(args, "--baseline-addon");
 const baselineAddon = baselineAddonOption
   ? path.resolve(baselineAddonOption)
@@ -187,6 +192,7 @@ const result = {
     timestamp: new Date().toISOString(),
     compareRuns: pairs,
     pairedBaseline: true,
+    baselineRef,
   },
   scenarios,
   comparison,
