@@ -303,10 +303,18 @@ Napi::Value RTCDataChannel::Send(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
     if (info[0].IsString()) {
-      auto str = info[0].ToString();
-      auto data = str.Utf8Value();
-
-      webrtc::DataBuffer buffer(data);
+      size_t size = 0;
+      auto status = napi_get_value_string_utf8(env, info[0], nullptr, 0, &size);
+      NAPI_THROW_IF_FAILED(env, status, env.Undefined())
+      // N-API needs room for a terminator, but SCTP must send only the UTF-8
+      // bytes. Encode directly into owned WebRTC storage instead of copying
+      // a temporary std::string into a second allocation.
+      rtc::CopyOnWriteBuffer data(size + 1);
+      status = napi_get_value_string_utf8(
+          env, info[0], data.MutableData<char>(), size + 1, &size);
+      NAPI_THROW_IF_FAILED(env, status, env.Undefined())
+      data.SetSize(size);
+      webrtc::DataBuffer buffer(data, false);
       SendAsync(std::move(buffer));
     } else {
       Napi::ArrayBuffer arraybuffer;

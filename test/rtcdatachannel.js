@@ -5,6 +5,35 @@ const { JSDOM } = require('jsdom');
 const { RTCDataChannel, RTCPeerConnection } = require('..');
 const { createRTCPeerConnections, negotiate } = require('./lib/pc');
 
+tape('text bursts preserve UTF-8, embedded nulls, empty strings and send-time values', async t => {
+  const [sender, receiver] = createRTCPeerConnections();
+  const messages = ['', 'hello', 'nul\u0000inside', 'café 漢字 🚀', '\ud800', '\udc00', 'x'.repeat(16384)];
+  const expected = messages.map(value => Buffer.from(value).toString());
+  const received = [];
+  try {
+    const outgoing = sender.createDataChannel('utf8');
+    const opened = new Promise(resolve => { outgoing.onopen = resolve; });
+    const delivered = new Promise(resolve => {
+      receiver.ondatachannel = ({ channel }) => {
+        channel.onmessage = ({ data }) => {
+          received.push(data);
+          if (received.length === expected.length) resolve();
+        };
+      };
+    });
+    await negotiate(sender, receiver);
+    await opened;
+    messages.forEach(value => outgoing.send(value));
+    messages.fill('changed after send');
+    await delivered;
+    t.deepEqual(received, expected);
+  } finally {
+    sender.close();
+    receiver.close();
+  }
+  t.end();
+});
+
 tape('closing during binary delivery releases pending message events safely', async t => {
   for (let round = 0; round < 5; round += 1) {
     const [sender, receiver] = createRTCPeerConnections();
