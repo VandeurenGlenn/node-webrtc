@@ -4,6 +4,8 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
+const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const { readStatsResource } = require("./web-platform-tests/upstream-stats");
 
@@ -16,6 +18,27 @@ test("modern stats WPTs and helper remain byte-for-byte upstream copies", () => 
   for (const [file, hash] of Object.entries(hashes)) {
     const body = fs.readFileSync(path.join(__dirname, "web-platform-tests/overrides", file));
     assert.equal(createHash("sha256").update(body).digest("hex"), hash, file);
+  }
+});
+
+test("upstream checksums survive a Windows-style Git checkout", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "wrtc-wpt-checkout-"));
+  try {
+    const files = ["webrtc/RTCRtpSender-getStats.https.html",
+      "webrtc/RTCRtpReceiver-getStats.https.html", "webrtc/stats/RTCPeerConnection-helper.js"];
+    const prefix = root.replace(/\\/g, "/") + "/";
+    const result = spawnSync("git", ["-c", "core.autocrlf=true", "-c", "core.eol=crlf",
+      "checkout-index", "--prefix=" + prefix, "--", ...files.map(file => "test/web-platform-tests/overrides/" + file)],
+    { cwd: path.resolve(__dirname, ".."), encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr);
+    for (const file of files) {
+      const relative = "test/web-platform-tests/overrides/" + file;
+      const original = fs.readFileSync(path.resolve(__dirname, "..", relative));
+      const checkedOut = fs.readFileSync(path.join(root, relative));
+      assert.deepEqual(checkedOut, original, file);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
 

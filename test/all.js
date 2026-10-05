@@ -27,6 +27,7 @@ require("./rtc-events");
 require("./rtcrtpreceiver");
 require("./rtcrtpsender");
 require("./rtp-stats");
+require("./rtp-stats-compatibility");
 require("./rtcvideosink");
 require("./rtcvideosource");
 require("./send-arraybuffer");

@@ -50,11 +50,15 @@ test('implicit native offer and answer complete an SDP exchange', async () => {
 });
 
 test('implicit setLocalDescription preserves a still-valid created offer', async () => {
-  const pc = new RTCPeerConnection();
+  // This test checks reuse of the created offer, not asynchronous ICE updates.
+  // No relay servers means no gathered candidates can change its address/port.
+  const pc = new RTCPeerConnection({ iceTransportPolicy: 'relay', iceServers: [] });
   try {
     pc.addTransceiver('audio');
     const offer = await pc.createOffer();
     await pc.setLocalDescription();
+    assert.equal(pc.signalingState, 'have-local-offer');
+    assert.equal(pc.localDescription.type, 'offer');
     assert.equal(pc.localDescription.sdp, offer.sdp);
   } finally {
     pc.close();

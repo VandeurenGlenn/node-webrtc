@@ -17,6 +17,10 @@ export function associateTransceiver(transceiver, peer) {
 }
 
 for (const Endpoint of [binding.RTCRtpSender, binding.RTCRtpReceiver]) {
+  // Historical addons used by release A/B benchmarks already expose a native,
+  // non-configurable method. Keep their native API intact; only new addons that
+  // omit the old stubs need the owner-aware JavaScript implementation.
+  if (Object.getOwnPropertyDescriptor(Endpoint.prototype, "getStats")) continue;
   Object.defineProperty(Endpoint.prototype, "getStats", {
     configurable: true,
     enumerable: true,

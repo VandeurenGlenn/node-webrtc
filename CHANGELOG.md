@@ -17,6 +17,10 @@ Bug Fixes
 
 - Accept null/omitted ICE candidates as Promise-based calls instead of throwing
   during candidate parsing; reject when no remote description is available.
+- Preserve historical addons' native stats methods when loading release
+  benchmark baselines instead of attempting to redefine frozen properties.
+- Preserve upstream WPT files' LF line endings on Windows and keep the exact
+  offer-reuse regression check independent of asynchronous ICE address updates.
 
 0.7.2
 =====
