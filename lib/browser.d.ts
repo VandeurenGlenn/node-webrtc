@@ -8,6 +8,10 @@ export declare const MediaStreamTrack: {
     new (): MediaStreamTrack;
     prototype: MediaStreamTrack;
 };
+export declare const MediaStreamTrackEvent: {
+    new (type: string, eventInitDict: MediaStreamTrackEventInit): MediaStreamTrackEvent;
+    prototype: MediaStreamTrackEvent;
+};
 export declare const RTCDataChannel: {
     new (): RTCDataChannel;
     prototype: RTCDataChannel;
@@ -58,6 +62,10 @@ export declare const RTCSctpTransport: {
 export declare const RTCSessionDescription: {
     new (descriptionInitDict: RTCSessionDescriptionInit): RTCSessionDescription;
     prototype: RTCSessionDescription;
+};
+export declare const RTCTrackEvent: {
+    new (type: string, eventInitDict: RTCTrackEventInit): RTCTrackEvent;
+    prototype: RTCTrackEvent;
 };
 export declare const getUserMedia: any;
 export declare const mediaDevices: MediaDevices;

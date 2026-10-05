@@ -22,6 +22,7 @@ require("./rtcaudiosink");
 require("./rtcaudiosource");
 require("./rtcdtlstransport");
 require("./rtcdatachannel");
+require("./rtc-events");
 require("./rtcrtpreceiver");
 require("./rtcrtpsender");
 require("./rtcvideosink");

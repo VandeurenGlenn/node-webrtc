@@ -1,1 +1,3 @@
-export default function RTCPeerConnectionIceEvent(type: any, eventInitDict: any): void;
+export default class RTCPeerConnectionIceEvent extends Event {
+    constructor(type: any, eventInitDict?: {});
+}
