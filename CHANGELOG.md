@@ -1,3 +1,14 @@
+Unreleased
+==========
+
+New Features
+------------
+
+- Implement targeted `RTCRtpSender#getStats()` and `RTCRtpReceiver#getStats()`
+  using native WebRTC stats selection.
+- Support `RTCPeerConnection#getStats(track)` with track validation and
+  `InvalidAccessError` rejection for missing or ambiguous selectors.
+
 0.7.2
 =====
 

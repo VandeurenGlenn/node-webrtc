@@ -7,9 +7,11 @@
  */
 #include "src/interfaces/rtc_peer_connection.h"
 
+#include <algorithm>
 #include <iosfwd>
 
 #include <webrtc/api/media_types.h>
+#include <webrtc/api/make_ref_counted.h>
 #include <webrtc/api/environment/environment_factory.h>
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/api/rtc_error.h>
@@ -530,8 +532,39 @@ Napi::Value RTCPeerConnection::GetStats(const Napi::CallbackInfo& info) {
     return deferred.Promise();
   }
 
-  auto callback = new rtc::RefCountedObject<RTCStatsCollector>(this, deferred);
-  _jinglePeerConnection->GetStats(callback);
+  auto callback = webrtc::make_ref_counted<RTCStatsCollector>(this, deferred);
+  auto selector = info[0];
+  if (selector.IsUndefined() || selector.IsNull()) {
+    _jinglePeerConnection->GetStats(callback.get());
+  } else if (selector.IsObject() && selector.As<Napi::Object>().InstanceOf(RTCRtpSender::constructor().Value())) {
+    void* wrapped = nullptr;
+    if (napi_unwrap(env, selector, &wrapped) != napi_ok || !wrapped) {
+      deferred.Reject(Napi::TypeError::New(env, "Invalid stats sender").Value());
+      return deferred.Promise();
+    }
+    auto sender = static_cast<RTCRtpSender*>(wrapped)->sender();
+    auto senders = _jinglePeerConnection->GetSenders();
+    if (std::find(senders.begin(), senders.end(), sender) == senders.end()) {
+      deferred.Reject(Napi::TypeError::New(env, "Sender belongs to another peer connection").Value());
+    } else {
+      _jinglePeerConnection->GetStats(sender, callback);
+    }
+  } else if (selector.IsObject() && selector.As<Napi::Object>().InstanceOf(RTCRtpReceiver::constructor().Value())) {
+    void* wrapped = nullptr;
+    if (napi_unwrap(env, selector, &wrapped) != napi_ok || !wrapped) {
+      deferred.Reject(Napi::TypeError::New(env, "Invalid stats receiver").Value());
+      return deferred.Promise();
+    }
+    auto receiver = static_cast<RTCRtpReceiver*>(wrapped)->receiver();
+    auto receivers = _jinglePeerConnection->GetReceivers();
+    if (std::find(receivers.begin(), receivers.end(), receiver) == receivers.end()) {
+      deferred.Reject(Napi::TypeError::New(env, "Receiver belongs to another peer connection").Value());
+    } else {
+      _jinglePeerConnection->GetStats(receiver, callback);
+    }
+  } else {
+    deferred.Reject(Napi::TypeError::New(env, "Invalid stats endpoint").Value());
+  }
 
   return deferred.Promise();  // NOLINT
 }

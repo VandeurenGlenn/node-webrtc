@@ -71,6 +71,13 @@ has been removed. Use the standards-based Promise API instead:
 const stats = await peerConnection.getStats();
 ```
 
+Targeted reports are also available through `sender.getStats()`,
+`receiver.getStats()`, and `peerConnection.getStats(track)`. WebRTC filters these
+reports to the selected RTP stream and its referenced stats, rather than
+returning the entire connection report. A track selector must match exactly
+one sender or receiver; missing or ambiguous matches reject with
+`InvalidAccessError`.
+
 Examples
 --------
 
