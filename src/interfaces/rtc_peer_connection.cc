@@ -421,6 +421,18 @@ Napi::Value RTCPeerConnection::AddIceCandidate(const Napi::CallbackInfo& info) {
   auto env = info.Env();
   CREATE_DEFERRED(env, deferred)
 
+  // A null/omitted candidate is the end-of-candidates marker, not a candidate
+  // object to parse. Like ordinary candidates it requires a remote description.
+  if (info[0].IsNull() || info[0].IsUndefined()) {
+    if (!_jinglePeerConnection || !_jinglePeerConnection->remote_description()) {
+      Reject(deferred, ErrorFactory::CreateInvalidStateError(env,
+          "Cannot add ICE candidate without a remote description"));
+    } else {
+      Resolve(deferred, env.Undefined());
+    }
+    return deferred.Promise();
+  }
+
   CONVERT_ARGS_OR_REJECT_AND_RETURN_NAPI(deferred, info, candidate, std::shared_ptr<webrtc::IceCandidateInterface>)
 
   Dispatch(CreatePromise<RTCPeerConnection>(deferred, [this, candidate](auto deferred) {

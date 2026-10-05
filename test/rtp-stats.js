@@ -6,6 +6,20 @@ const { setTimeout: delay } = require("node:timers/promises");
 const wrtc = require("..");
 const { createRTCPeerConnections, negotiate } = require("./lib/pc");
 
+test("null and omitted ICE candidates return promises instead of throwing", async t => {
+  const pc = new wrtc.RTCPeerConnection();
+  const remote = new wrtc.RTCPeerConnection();
+  t.after(() => { pc.close(); remote.close(); });
+  await assert.rejects(pc.addIceCandidate(null), { name: "InvalidStateError" });
+  await assert.rejects(pc.addIceCandidate(), { name: "InvalidStateError" });
+  remote.addTransceiver("audio");
+  await pc.setRemoteDescription(await remote.createOffer());
+  await pc.addIceCandidate(null);
+  await pc.addIceCandidate();
+  pc.close();
+  await assert.rejects(pc.addIceCandidate(null), { name: "InvalidStateError" });
+});
+
 test("RTP stats reject invalid receivers and track selectors", async t => {
   const pc = new wrtc.RTCPeerConnection();
   const source = new wrtc.nonstandard.RTCAudioSource();

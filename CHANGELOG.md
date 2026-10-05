@@ -8,6 +8,15 @@ New Features
   using native WebRTC stats selection.
 - Support `RTCPeerConnection#getStats(track)` with track validation and
   `InvalidAccessError` rejection for missing or ambiguous selectors.
+- Run current upstream RTP stats tests with an isolated upstream helper,
+  preserving all assertions and reporting remaining closed-peer and receiver
+  failures as actual subtest results.
+
+Bug Fixes
+---------
+
+- Accept null/omitted ICE candidates as Promise-based calls instead of throwing
+  during candidate parsing; reject when no remote description is available.
 
 0.7.2
 =====

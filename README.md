@@ -78,6 +78,11 @@ returning the entire connection report. A track selector must match exactly
 one sender or receiver; missing or ambiguous matches reject with
 `InvalidAccessError`.
 
+The WPT runner uses unchanged modern upstream sender/receiver stats tests with
+an isolated helper. Remaining failures (including closed-peer stats and remote
+track readiness) stay visible in the `wpt-results.json` Actions artifact. A green
+WPT job means the recorded expectations matched, not that every subtest passed.
+
 Examples
 --------
 

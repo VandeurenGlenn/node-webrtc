@@ -31,6 +31,7 @@ require("./send-arraybuffer");
 require("./sessiondesc");
 require("./verify-npm-release");
 require("./wpt-results");
+require("./wpt-upstream-stats");
 
 // TODO(mroberts): async_hooks were introduced in Node 9. We use them to test
 // that destructors fire at the appropriate time (and hence, no memory leaks
