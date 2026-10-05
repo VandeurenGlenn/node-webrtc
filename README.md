@@ -31,6 +31,13 @@ WebRTC conformance. Snapshot modernization is a separate follow-up.
 Node.js 24.15 or newer is required. The package uses the platform-provided
 `DOMException` instead of the deprecated userland polyfill.
 
+`await peerConnection.setLocalDescription()` can generate and set an offer or
+answer using WebRTC's native operation chain. An omitted argument, `undefined`,
+`null`, or an empty description dictionary selects this automatic behavior.
+Explicit descriptions remain supported. Closed peers reject with
+`InvalidStateError`; the binding does not emulate negotiation with a separate
+JavaScript `createOffer()`/`createAnswer()` sequence.
+
 Windows source builds use Visual Studio 2022 and Windows SDK 10.0.28000 for
 CMake and the Node addon; WebRTC itself is compiled with its bundled
 `clang-cl`.

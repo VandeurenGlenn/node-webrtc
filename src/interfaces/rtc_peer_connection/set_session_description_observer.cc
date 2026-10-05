@@ -20,7 +20,7 @@ void node_webrtc::SetSessionDescriptionObserver::OnSuccess() {
   Resolve(node_webrtc::Undefined());
 }
 
-void node_webrtc::SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error) {
+static node_webrtc::SomeError DescriptionError(webrtc::RTCError& error) {
   auto someError = node_webrtc::From<node_webrtc::SomeError>(&error).FromValidation([](auto errors) {
     return node_webrtc::SomeError(errors[0]);
   });
@@ -32,5 +32,27 @@ void node_webrtc::SetSessionDescriptionObserver::OnFailure(webrtc::RTCError erro
                 node_webrtc::ErrorFactory::DOMExceptionName::kInvalidModificationError));
   }
 
-  Reject(someError);
+  return someError;
+}
+
+void node_webrtc::SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error) {
+  Reject(DescriptionError(error));
+}
+
+void node_webrtc::SetLocalDescriptionObserver::OnSetLocalDescriptionComplete(webrtc::RTCError error) {
+  auto peer = _peer_connection;
+  if (error.ok()) {
+    Dispatch([peer](auto deferred) {
+      if (!peer->IsClosed()) {
+        node_webrtc::Resolve(deferred, node_webrtc::Undefined());
+      }
+    });
+  } else {
+    auto reason = DescriptionError(error);
+    Dispatch([peer, reason](auto deferred) {
+      if (!peer->IsClosed()) {
+        node_webrtc::Reject(deferred, reason);
+      }
+    });
+  }
 }

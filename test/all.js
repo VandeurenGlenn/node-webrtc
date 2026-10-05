@@ -12,6 +12,7 @@ require("./custom-settings");
 require("./eventtarget");
 require("./get-configuration");
 require("./i420helpers");
+require("./implicit-local-descriptions");
 require("./iceservers");
 require("./mediastream");
 require("./native-platforms");
