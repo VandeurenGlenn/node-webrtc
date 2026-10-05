@@ -25,7 +25,7 @@ function isExternal(id) {
 }
 
 export default {
-  input: "src/lib/index.ts",
+  input: ["src/lib/index.ts", "src/lib/browser.ts"],
   output: {
     dir: "lib",
     format: "esm",

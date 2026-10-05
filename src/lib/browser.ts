@@ -3,6 +3,7 @@
 
 export const MediaStream = window.MediaStream;
 export const MediaStreamTrack = window.MediaStreamTrack;
+export const MediaStreamTrackEvent = window.MediaStreamTrackEvent;
 export const RTCDataChannel = window.RTCDataChannel;
 export const RTCDataChannelEvent = window.RTCDataChannelEvent;
 export const RTCDtlsTransport = window.RTCDtlsTransport;
@@ -15,5 +16,6 @@ export const RTCRtpSender = window.RTCRtpSender;
 export const RTCRtpTransceiver = window.RTCRtpTransceiver;
 export const RTCSctpTransport = window.RTCSctpTransport;
 export const RTCSessionDescription = window.RTCSessionDescription;
+export const RTCTrackEvent = window.RTCTrackEvent;
 export const getUserMedia = window.getUserMedia;
 export const mediaDevices = navigator.mediaDevices;

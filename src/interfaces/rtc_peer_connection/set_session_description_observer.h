@@ -10,6 +10,8 @@
 #include <memory>
 
 #include <webrtc/api/jsep.h>
+#include <webrtc/api/make_ref_counted.h>
+#include <webrtc/api/set_local_description_observer_interface.h>
 
 #include "src/interfaces/rtc_peer_connection.h"
 #include "src/node/promise.h"
@@ -17,6 +19,22 @@
 namespace webrtc { class RTCError; }
 
 namespace node_webrtc {
+
+class SetLocalDescriptionObserver
+  : public PromiseCreator<RTCPeerConnection>
+  , public webrtc::SetLocalDescriptionObserverInterface {
+ public:
+  SetLocalDescriptionObserver(
+      RTCPeerConnection* peer_connection,
+      Napi::Promise::Deferred deferred)
+    : PromiseCreator<RTCPeerConnection>(peer_connection, deferred)
+    , _peer_connection(peer_connection) {}
+
+  void OnSetLocalDescriptionComplete(webrtc::RTCError) override;
+
+ private:
+  RTCPeerConnection* _peer_connection;
+};
 
 class SetSessionDescriptionObserver
   : public PromiseCreator<RTCPeerConnection>

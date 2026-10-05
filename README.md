@@ -28,8 +28,21 @@ was interrupted. The current suite uses a pinned legacy WPT snapshot and a
 jsdom harness, not a full browser; browser-only skips are not evidence of native
 WebRTC conformance. Snapshot modernization is a separate follow-up.
 
+`RTCTrackEvent` and `MediaStreamTrackEvent` are exported for Node and browser
+consumers. Track and ICE events inherit Node's built-in `Event`, validate their
+native interface members, and expose read-only payloads. `RTCTrackEvent.streams`
+is a frozen copy of the supplied sequence; native `track` notifications use this
+event class too. Full browser/Web IDL conformance remains a work in progress.
+
 Node.js 24.15 or newer is required. The package uses the platform-provided
 `DOMException` instead of the deprecated userland polyfill.
+
+`await peerConnection.setLocalDescription()` can generate and set an offer or
+answer using WebRTC's native operation chain. An omitted argument, `undefined`,
+`null`, or an empty description dictionary selects this automatic behavior.
+Explicit descriptions remain supported. Closed peers reject with
+`InvalidStateError`; the binding does not emulate negotiation with a separate
+JavaScript `createOffer()`/`createAnswer()` sequence.
 
 Windows source builds use Visual Studio 2022 and Windows SDK 10.0.28000 for
 CMake and the Node addon; WebRTC itself is compiled with its bundled

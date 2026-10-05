@@ -1,5 +1,14 @@
 'use strict';
 const fs = require('fs');
+const path = require('node:path');
+
+exports.readOverride = pathname => {
+  if (!pathname.endsWith('.html')) return undefined;
+  const root = path.resolve(__dirname, 'overrides');
+  const filename = path.resolve(root, '.' + pathname);
+  if (!filename.startsWith(root + path.sep) || !fs.existsSync(filename)) return undefined;
+  return fs.readFileSync(filename);
+};
 
 const EXPECTED_MANIFEST_VERSION = 6;
 

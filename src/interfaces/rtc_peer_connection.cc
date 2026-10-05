@@ -371,7 +371,39 @@ Napi::Value RTCPeerConnection::SetLocalDescription(const Napi::CallbackInfo& inf
   auto env = info.Env();
   CREATE_DEFERRED(env, deferred)
 
-  CONVERT_ARGS_OR_REJECT_AND_RETURN_NAPI(deferred, info, descriptionInit, RTCSessionDescriptionInit)
+  if (!_jinglePeerConnection || _jinglePeerConnection->signaling_state() == webrtc::PeerConnectionInterface::SignalingState::kClosed) {
+    Reject(deferred, ErrorFactory::CreateInvalidStateError(env,
+            "Failed to execute 'setLocalDescription' on 'RTCPeerConnection': "
+            "The RTCPeerConnection's signalingState is 'closed'."));
+    return deferred.Promise();
+  }
+
+  Napi::Value input = info.Length() == 0 ? env.Undefined() : info[0];
+  bool implicit = input.IsUndefined() || input.IsNull();
+  if (!implicit && input.IsObject()) {
+    auto init = input.As<Napi::Object>();
+    auto type = init.Get("type");
+    auto sdp = init.Get("sdp");
+    implicit = type.IsUndefined() && (sdp.IsUndefined() ||
+        (sdp.IsString() && sdp.As<Napi::String>().Utf8Value().empty()));
+    // Read dictionary getters once, including on the explicit-description path.
+    auto normalized = Napi::Object::New(env);
+    normalized.Set("type", type);
+    normalized.Set("sdp", sdp);
+    input = normalized;
+  }
+  if (implicit) {
+    auto observer = webrtc::make_ref_counted<SetLocalDescriptionObserver>(this, deferred);
+    _jinglePeerConnection->SetLocalDescription(observer);
+    return deferred.Promise();
+  }
+
+  auto maybeDescriptionInit = From<RTCSessionDescriptionInit>(input);
+  if (maybeDescriptionInit.IsInvalid()) {
+    deferred.Reject(Napi::TypeError::New(env, maybeDescriptionInit.ToErrors()[0]).Value());
+    return deferred.Promise();
+  }
+  auto descriptionInit = maybeDescriptionInit.UnsafeFromValid();
   if (descriptionInit.sdp.empty()) {
     descriptionInit.sdp = _lastSdp.sdp;
   }
@@ -384,15 +416,8 @@ Napi::Value RTCPeerConnection::SetLocalDescription(const Napi::CallbackInfo& inf
   auto rawDescription = maybeRawDescription.UnsafeFromValid();
   std::unique_ptr<webrtc::SessionDescriptionInterface> description(rawDescription);
 
-  if (!_jinglePeerConnection || _jinglePeerConnection->signaling_state() == webrtc::PeerConnectionInterface::SignalingState::kClosed) {
-    Reject(deferred, ErrorFactory::CreateInvalidStateError(env,
-            "Failed to execute 'setLocalDescription' on 'RTCPeerConnection': "
-            "The RTCPeerConnection's signalingState is 'closed'."));
-    return deferred.Promise();
-  }
-
-  auto observer = new rtc::RefCountedObject<SetSessionDescriptionObserver>(this, deferred);
-  _jinglePeerConnection->SetLocalDescription(observer, description.release());
+  auto observer = webrtc::make_ref_counted<SetLocalDescriptionObserver>(this, deferred);
+  _jinglePeerConnection->SetLocalDescription(std::move(description), observer);
 
   return deferred.Promise();
 }
