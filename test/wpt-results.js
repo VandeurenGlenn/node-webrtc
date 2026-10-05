@@ -6,8 +6,32 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { JSDOM, requestInterceptor } = require('jsdom');
 const { createReport, summarizeResults } = require('./web-platform-tests/result-report');
+const { readOverride } = require('./web-platform-tests/wpt-manifest-utils');
 const { RTCDataChannelEvent, RTCPeerConnection } = require('..');
+
+test('WPT overrides load a pinned upstream document without exposing other files', () => {
+  const body = readOverride('/webrtc/RTCPeerConnection-setLocalDescription-parameterless.https.html');
+  assert.ok(body.toString().includes('rejects with InvalidStateError if already closed'));
+  assert.equal(readOverride('/resources/testharness.js'), undefined);
+  assert.equal(readOverride('/webrtc/not-present.html'), undefined);
+  assert.equal(readOverride('/../../package.json'), undefined);
+});
+
+test('jsdom intercepts the initial WPT document before requesting the legacy server', async () => {
+  const dom = await JSDOM.fromURL('http://wpt-override.invalid/webrtc/RTCPeerConnection-setLocalDescription-parameterless.https.html', {
+    resources: { interceptors: [requestInterceptor(request => {
+      const body = readOverride(new URL(request.url).pathname);
+      return body ? new Response(body, { headers: { 'Content-Type': 'text/html' } }) : undefined;
+    })] }
+  });
+  try {
+    assert.ok(dom.serialize().includes('rejects with InvalidStateError if already closed'));
+  } finally {
+    dom.window.close();
+  }
+});
 
 test('WPT reports actual subtests inside expected-failure files and incomplete runs', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wrtc-wpt-results-'));

@@ -64,6 +64,9 @@ class RTCPeerConnection
 
   void SaveLastSdp(const RTCSessionDescriptionInit& lastSdp);
 
+  // Only inspect this from the Node thread, where Close clears the connection.
+  bool IsClosed() const { return !_jinglePeerConnection; }
+
  private:
   Napi::Value AddTrack(const Napi::CallbackInfo&);
   Napi::Value AddTransceiver(const Napi::CallbackInfo&);
