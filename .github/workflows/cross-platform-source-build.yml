@@ -130,7 +130,7 @@ jobs:
 
       - name: Run tooling tests
         run: |
-          node --test test/benchmark-report.js test/benchmark-provenance.js
+          node --test test/benchmark-report.js test/benchmark-provenance.js test/rtp-stats-compatibility.js test/wpt-upstream-stats.js
           node scripts/summarize-wpt.js "$RUNNER_TEMP/wpt-summary.json"
 
       - name: Audit dependencies

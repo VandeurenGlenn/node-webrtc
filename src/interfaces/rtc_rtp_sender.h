@@ -53,7 +53,6 @@ class RTCRtpSender: public AsyncObjectWrap<RTCRtpSender> {
 
   Napi::Value GetParameters(const Napi::CallbackInfo&);
   Napi::Value SetParameters(const Napi::CallbackInfo&);
-  Napi::Value GetStats(const Napi::CallbackInfo&);
   Napi::Value ReplaceTrack(const Napi::CallbackInfo&);
   Napi::Value SetStreams(const Napi::CallbackInfo&);
 

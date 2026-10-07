@@ -1,3 +1,27 @@
+Unreleased
+==========
+
+New Features
+------------
+
+- Implement targeted `RTCRtpSender#getStats()` and `RTCRtpReceiver#getStats()`
+  using native WebRTC stats selection.
+- Support `RTCPeerConnection#getStats(track)` with track validation and
+  `InvalidAccessError` rejection for missing or ambiguous selectors.
+- Run current upstream RTP stats tests with an isolated upstream helper,
+  preserving all assertions and reporting remaining closed-peer and receiver
+  failures as actual subtest results.
+
+Bug Fixes
+---------
+
+- Accept null/omitted ICE candidates as Promise-based calls instead of throwing
+  during candidate parsing; reject when no remote description is available.
+- Preserve historical addons' native stats methods when loading release
+  benchmark baselines instead of attempting to redefine frozen properties.
+- Preserve upstream WPT files' LF line endings on Windows and keep the exact
+  offer-reuse regression check independent of asynchronous ICE address updates.
+
 0.7.2
 =====
 

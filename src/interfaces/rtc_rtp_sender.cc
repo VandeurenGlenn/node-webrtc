@@ -107,12 +107,6 @@ Napi::Value RTCRtpSender::SetParameters(const Napi::CallbackInfo& info) {
   return deferred.Promise();
 }
 
-Napi::Value RTCRtpSender::GetStats(const Napi::CallbackInfo& info) {
-  CREATE_DEFERRED(info.Env(), deffered)
-  Reject(deferred, Napi::Error::New(info.Env(), "Not yet implemented; file a feature request against node-webrtc"));
-  return deferred.Promise();
-}
-
 Napi::Value RTCRtpSender::ReplaceTrack(const Napi::CallbackInfo& info) {
   CREATE_DEFERRED(info.Env(), deferred)
   CONVERT_ARGS_OR_REJECT_AND_RETURN_NAPI(deferred, info, maybeTrack, Either<Null COMMA MediaStreamTrack*>)
@@ -188,7 +182,6 @@ void RTCRtpSender::Init(Napi::Env env, Napi::Object exports) {
     InstanceAccessor("rtcpTransport", &RTCRtpSender::GetRtcpTransport, nullptr),
     InstanceMethod("getParameters", &RTCRtpSender::GetParameters),
     InstanceMethod("setParameters", &RTCRtpSender::SetParameters),
-    InstanceMethod("getStats", &RTCRtpSender::GetStats),
     InstanceMethod("replaceTrack", &RTCRtpSender::ReplaceTrack),
     InstanceMethod("setStreams", &RTCRtpSender::SetStreams),
     StaticMethod("getCapabilities", &RTCRtpSender::GetCapabilities)

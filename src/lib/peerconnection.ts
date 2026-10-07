@@ -9,6 +9,7 @@ import RTCIceCandidate from "./icecandidate.js";
 import RTCPeerConnectionIceEvent from "./rtcpeerconnectioniceevent.js";
 import RTCPeerConnectionIceErrorEvent from "./rtcpeerconnectioniceerrorevent.js";
 import RTCSessionDescription from "./sessiondescription.js";
+import { associateEndpoint, associateTransceiver } from "./rtpstats.js";
 import RTCTrackEvent from "./rtctrackevent.js";
 
 function getCachedSessionDescription(self, key, description) {
@@ -183,6 +184,8 @@ function RTCPeerConnection() {
   // Attach events to the native PeerConnection object
   //
   pc.ontrack = function ontrack(receiver, streams, transceiver) {
+    associateEndpoint(receiver, pc);
+    associateTransceiver(transceiver, pc);
     const event = new RTCTrackEvent("track", {
       track: receiver.track,
       receiver: receiver,
@@ -280,11 +283,11 @@ RTCPeerConnection.prototype.addIceCandidate = function addIceCandidate(
 };
 
 RTCPeerConnection.prototype.addTransceiver = function addTransceiver() {
-  return this._pc.addTransceiver.apply(this._pc, arguments);
+  return associateTransceiver(this._pc.addTransceiver.apply(this._pc, arguments), this._pc);
 };
 
 RTCPeerConnection.prototype.addTrack = function addTrack(track, ...streams) {
-  return this._pc.addTrack(track, streams);
+  return associateEndpoint(this._pc.addTrack(track, streams), this._pc);
 };
 
 RTCPeerConnection.prototype.close = function close() {
@@ -318,19 +321,31 @@ RTCPeerConnection.prototype.getConfiguration = function getConfiguration() {
 };
 
 RTCPeerConnection.prototype.getReceivers = function getReceivers() {
-  return this._pc.getReceivers();
+  return this._pc.getReceivers().map(receiver => associateEndpoint(receiver, this._pc));
 };
 
 RTCPeerConnection.prototype.getSenders = function getSenders() {
-  return this._pc.getSenders();
+  return this._pc.getSenders().map(sender => associateEndpoint(sender, this._pc));
 };
 
 RTCPeerConnection.prototype.getTransceivers = function getTransceivers() {
-  return this._pc.getTransceivers();
+  return this._pc.getTransceivers().map(transceiver => associateTransceiver(transceiver, this._pc));
 };
 
-RTCPeerConnection.prototype.getStats = function getStats() {
-  return this._pc.getStats();
+RTCPeerConnection.prototype.getStats = function getStats(selector) {
+  if (selector == null) {
+    return this._pc.getStats();
+  }
+  if (!(selector instanceof _webrtc.MediaStreamTrack)) {
+    return Promise.reject(new TypeError("selector must be a MediaStreamTrack"));
+  }
+  const endpoints = [...this.getSenders(), ...this.getReceivers()]
+    .filter(endpoint => endpoint.track === selector);
+  if (endpoints.length !== 1) {
+    return Promise.reject(new DOMException(
+      "selector must match exactly one sender or receiver", "InvalidAccessError"));
+  }
+  return this._pc.getStats(endpoints[0]);
 };
 
 RTCPeerConnection.prototype.removeTrack = function removeTrack(sender) {

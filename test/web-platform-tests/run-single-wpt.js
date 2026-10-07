@@ -7,6 +7,7 @@ const { it } = require('mocha');
 const { inBrowserContext } = require('./util.js');
 const { JSDOM, VirtualConsole, requestInterceptor } = require('jsdom');
 const wrtc = require('../..');
+const { readStatsResource } = require('./upstream-stats.js');
 const { readOverride } = require('./wpt-manifest-utils.js');
 
 const reporterPathname = '/resources/testharnessreport.js';
@@ -29,6 +30,12 @@ module.exports = (urlPrefixFactory, report) => {
 
 const resourceInterceptor = requestInterceptor(async request => {
   const url = new URL(request.url);
+  const upstreamStats = readStatsResource(url.pathname);
+  if (upstreamStats) {
+    return new Response(upstreamStats.body, {
+      headers: { 'Content-Type': upstreamStats.contentType }
+    });
+  }
   const override = readOverride(url.pathname);
   if (override) {
     return new Response(override, { headers: { 'Content-Type': 'text/html' } });

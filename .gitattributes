@@ -1,0 +1,2 @@
+# Preserve upstream WPT files, including their final blank lines.
+test/web-platform-tests/overrides/** text eol=lf whitespace=-blank-at-eof

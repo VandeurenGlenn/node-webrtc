@@ -1,0 +1,36 @@
+// @ts-nocheck
+import binding from "./binding.js";
+
+// An endpoint keeps its native peer alive, without a global strong registry or
+// an unsafe native owner pointer. Transceiver getters return cached wrappers.
+const owners = new WeakMap();
+
+export function associateEndpoint(endpoint, peer) {
+  owners.set(endpoint, peer);
+  return endpoint;
+}
+
+export function associateTransceiver(transceiver, peer) {
+  associateEndpoint(transceiver.sender, peer);
+  associateEndpoint(transceiver.receiver, peer);
+  return transceiver;
+}
+
+for (const Endpoint of [binding.RTCRtpSender, binding.RTCRtpReceiver]) {
+  // Historical addons used by release A/B benchmarks already expose a native,
+  // non-configurable method. Keep their native API intact; only new addons that
+  // omit the old stubs need the owner-aware JavaScript implementation.
+  if (Object.getOwnPropertyDescriptor(Endpoint.prototype, "getStats")) continue;
+  Object.defineProperty(Endpoint.prototype, "getStats", {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: function getStats() {
+      const peer = owners.get(this);
+      if (!peer || !(this instanceof Endpoint)) {
+        return Promise.reject(new TypeError("Illegal invocation"));
+      }
+      return peer.getStats(this);
+    },
+  });
+}

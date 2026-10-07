@@ -7,6 +7,7 @@ export default [
       "build/**",
       "lib/**",
       "test/web-platform-tests/tests/**",
+      "test/web-platform-tests/overrides/**",
     ],
   },
   js.configs.recommended,

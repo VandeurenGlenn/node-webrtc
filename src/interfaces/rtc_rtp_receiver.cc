@@ -111,12 +111,6 @@ Napi::Value RTCRtpReceiver::GetSynchronizationSources(const Napi::CallbackInfo& 
   return result;
 }
 
-Napi::Value RTCRtpReceiver::GetStats(const Napi::CallbackInfo& info) {
-  CREATE_DEFERRED(info.Env(), deferred)
-  Reject(deferred, Napi::Error::New(info.Env(), "Not yet implemented; file a feature request against node-webrtc"));
-  return deferred.Promise();
-}
-
 Wrap <
 RTCRtpReceiver*,
 rtc::scoped_refptr<webrtc::RtpReceiverInterface>,
@@ -152,7 +146,6 @@ void RTCRtpReceiver::Init(Napi::Env env, Napi::Object exports) {
     InstanceMethod("getParameters", &RTCRtpReceiver::GetParameters),
     InstanceMethod("getContributingSources", &RTCRtpReceiver::GetContributingSources),
     InstanceMethod("getSynchronizationSources", &RTCRtpReceiver::GetSynchronizationSources),
-    InstanceMethod("getStats", &RTCRtpReceiver::GetStats),
     StaticMethod("getCapabilities", &RTCRtpReceiver::GetCapabilities)
   });
 
