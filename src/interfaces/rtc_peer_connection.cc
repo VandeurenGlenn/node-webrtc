@@ -106,7 +106,17 @@ RTCPeerConnection::RTCPeerConnection(const Napi::CallbackInfo& info)
 }
 
 RTCPeerConnection::~RTCPeerConnection() {
+  if (_closedPeerConnection) {
+    napi_remove_env_cleanup_hook(Env(), ReleaseClosedStats, this);
+  }
   _jinglePeerConnection = nullptr;
+  _closedSenders.clear();
+  _closedReceivers.clear();
+  _closedPeerConnection = nullptr;
+  if (_statsFactory) {
+    _statsFactory->Unref();
+    _statsFactory = nullptr;
+  }
   _channels.clear();
   if (_factory) {
     if (_shouldReleaseFactory) {
@@ -114,6 +124,18 @@ RTCPeerConnection::~RTCPeerConnection() {
     }
     _factory = nullptr;
   }
+}
+
+void RTCPeerConnection::ReleaseClosedStats(void* data) {
+  auto peer = static_cast<RTCPeerConnection*>(data);
+  // Environment cleanup runs before wrapper finalizers, whose order is not
+  // guaranteed. Destroy WebRTC proxies while their factory threads still live.
+  peer->_closedSenders.clear();
+  peer->_closedReceivers.clear();
+  peer->_closedPeerConnection = nullptr;
+  // The environment itself finalizes all references; do not touch a factory
+  // wrapper from a later peer finalizer after the factory may have been freed.
+  peer->_statsFactory = nullptr;
 }
 
 void RTCPeerConnection::OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState state) {
@@ -564,15 +586,16 @@ Napi::Value RTCPeerConnection::GetStats(const Napi::CallbackInfo& info) {
 
   CREATE_DEFERRED(env, deferred)
 
-  if (!_jinglePeerConnection) {
+  auto connection = _jinglePeerConnection ? _jinglePeerConnection : _closedPeerConnection;
+  if (!connection) {
     Reject(deferred, ErrorFactory::CreateError(env, "RTCPeerConnection is closed"));
     return deferred.Promise();
   }
 
-  auto callback = webrtc::make_ref_counted<RTCStatsCollector>(this, deferred);
   auto selector = info[0];
   if (selector.IsUndefined() || selector.IsNull()) {
-    _jinglePeerConnection->GetStats(callback.get());
+    auto callback = webrtc::make_ref_counted<RTCStatsCollector>(this, deferred);
+    if (callback->IsReady()) connection->GetStats(callback.get());
   } else if (selector.IsObject() && selector.As<Napi::Object>().InstanceOf(RTCRtpSender::constructor().Value())) {
     void* wrapped = nullptr;
     if (napi_unwrap(env, selector, &wrapped) != napi_ok || !wrapped) {
@@ -580,11 +603,12 @@ Napi::Value RTCPeerConnection::GetStats(const Napi::CallbackInfo& info) {
       return deferred.Promise();
     }
     auto sender = static_cast<RTCRtpSender*>(wrapped)->sender();
-    auto senders = _jinglePeerConnection->GetSenders();
+    auto senders = _jinglePeerConnection ? connection->GetSenders() : _closedSenders;
     if (std::find(senders.begin(), senders.end(), sender) == senders.end()) {
       deferred.Reject(Napi::TypeError::New(env, "Sender belongs to another peer connection").Value());
     } else {
-      _jinglePeerConnection->GetStats(sender, callback);
+      auto callback = webrtc::make_ref_counted<RTCStatsCollector>(this, deferred);
+      if (callback->IsReady()) connection->GetStats(sender, callback);
     }
   } else if (selector.IsObject() && selector.As<Napi::Object>().InstanceOf(RTCRtpReceiver::constructor().Value())) {
     void* wrapped = nullptr;
@@ -593,11 +617,12 @@ Napi::Value RTCPeerConnection::GetStats(const Napi::CallbackInfo& info) {
       return deferred.Promise();
     }
     auto receiver = static_cast<RTCRtpReceiver*>(wrapped)->receiver();
-    auto receivers = _jinglePeerConnection->GetReceivers();
+    auto receivers = _jinglePeerConnection ? connection->GetReceivers() : _closedReceivers;
     if (std::find(receivers.begin(), receivers.end(), receiver) == receivers.end()) {
       deferred.Reject(Napi::TypeError::New(env, "Receiver belongs to another peer connection").Value());
     } else {
-      _jinglePeerConnection->GetStats(receiver, callback);
+      auto callback = webrtc::make_ref_counted<RTCStatsCollector>(this, deferred);
+      if (callback->IsReady()) connection->GetStats(receiver, callback);
     }
   } else {
     deferred.Reject(Napi::TypeError::New(env, "Invalid stats endpoint").Value());
@@ -625,7 +650,13 @@ Napi::Value RTCPeerConnection::UpdateIce(const Napi::CallbackInfo& info) {
 Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
   if (_jinglePeerConnection) {
     auto sdpSemantics = _cached_configuration.configuration.sdp_semantics;
+    _closedSenders = _jinglePeerConnection->GetSenders();
+    _closedReceivers = _jinglePeerConnection->GetReceivers();
     _jinglePeerConnection->Close();
+    _closedPeerConnection = _jinglePeerConnection;
+    _statsFactory = _factory;
+    _statsFactory->Ref();
+    napi_add_env_cleanup_hook(Env(), ReleaseClosedStats, this);
     // NOTE(mroberts): Perhaps another way to do this is to just register all remote MediaStreamTracks against this
     // RTCPeerConnection, not unlike what we do with RTCDataChannels.
     if (sdpSemantics == webrtc::SdpSemantics::kUnifiedPlan) {

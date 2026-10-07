@@ -112,6 +112,12 @@ class RTCPeerConnection
   UnsignedShortRange _port_range;
   ExtendedRTCConfiguration _cached_configuration;
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> _jinglePeerConnection;
+  // Closed connections remain queryable for stats, without reopening transport.
+  rtc::scoped_refptr<webrtc::PeerConnectionInterface> _closedPeerConnection;
+  std::vector<rtc::scoped_refptr<webrtc::RtpSenderInterface>> _closedSenders;
+  std::vector<rtc::scoped_refptr<webrtc::RtpReceiverInterface>> _closedReceivers;
+  PeerConnectionFactory* _statsFactory = nullptr;
+  static void ReleaseClosedStats(void*);
 
   PeerConnectionFactory* _factory;
   bool _shouldReleaseFactory;
