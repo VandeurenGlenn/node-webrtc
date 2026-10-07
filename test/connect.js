@@ -352,9 +352,9 @@ test('close the connections', function(t) {
     } catch (error) {
       is_invalid_state(error);
     }
-    peers[i].getStats().catch(function(err) {
-      t.ok(err);
-    });
+    peers[i].getStats().then(function(report) {
+      t.ok(report instanceof Map, 'closed connection stats resolve');
+    }, t.ifError.bind(t));
     peers[i].close();
   }
 

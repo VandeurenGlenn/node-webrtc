@@ -65,6 +65,27 @@ test("RTP stats reject ambiguous and foreign selectors", async t => {
   await assert.rejects(pc.getStats(transceiver.receiver.track), { name: "InvalidAccessError" });
 });
 
+test("closed peer stats settle independently of its stopped event loop", { timeout: 5000 }, async t => {
+  const pc = new wrtc.RTCPeerConnection();
+  const other = new wrtc.RTCPeerConnection();
+  t.after(() => { pc.close(); other.close(); });
+  const { sender, receiver } = pc.addTransceiver("audio");
+  const pending = [pc.getStats(), sender.getStats(), receiver.getStats()];
+  pc.close();
+  pc.close();
+  other.close();
+  for (const report of await Promise.all(pending)) assert.ok(report instanceof Map);
+  for (let round = 0; round < 3; round++) {
+    for (const report of await Promise.all([pc.getStats(), sender.getStats(), receiver.getStats()])) {
+      assert.ok(report instanceof Map);
+      assert.ok(![...report.values()].some(stat => /^(inbound|outbound)-rtp$/.test(stat.type)));
+    }
+  }
+  await assert.rejects(other._pc.getStats(sender), TypeError);
+  await assert.rejects(other._pc.getStats(receiver), TypeError);
+  await assert.rejects(pc._pc.getStats({}), TypeError);
+});
+
 test("RTP stats filter real outbound and inbound audio streams", { timeout: 15000 }, async t => {
   const [caller, callee] = createRTCPeerConnections();
   const sources = [new wrtc.nonstandard.RTCAudioSource(), new wrtc.nonstandard.RTCAudioSource()];
@@ -114,5 +135,15 @@ test("RTP stats filter real outbound and inbound audio streams", { timeout: 1500
     }
     assert.notEqual(selectedIds[0], selectedIds[1]);
     assert.equal([... (await peer.getStats()).values()].filter(stat => stat.type === type).length, 2);
+  }
+  const pending = [...senders, ...receivers].map(endpoint => endpoint.getStats());
+  clearInterval(timer);
+  caller.close(); callee.close();
+  await Promise.all(pending);
+  for (const endpoint of [...senders, ...receivers]) {
+    const report = await endpoint.getStats();
+    assert.ok(report instanceof Map);
+    assert.ok(![...report.values()].some(stat => /^(inbound|outbound)-rtp$/.test(stat.type)),
+      "closed endpoints must not reuse active RTP stats");
   }
 });

@@ -9,12 +9,16 @@ New Features
 - Support `RTCPeerConnection#getStats(track)` with track validation and
   `InvalidAccessError` rejection for missing or ambiguous selectors.
 - Run current upstream RTP stats tests with an isolated upstream helper,
-  preserving all assertions and reporting remaining closed-peer and receiver
+  preserving all assertions and reporting remaining receiver
   failures as actual subtest results.
 
 Bug Fixes
 ---------
 
+- Keep native connection and RTP endpoint stats queryable after `close()` and
+  deliver pending stats independently of the stopped peer event loop.
+- Release retained closed-peer proxies before factory teardown at process exit;
+  remove the expected failure for the unchanged upstream sender stats tests.
 - Accept null/omitted ICE candidates as Promise-based calls instead of throwing
   during candidate parsing; reject when no remote description is available.
 - Preserve historical addons' native stats methods when loading release

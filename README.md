@@ -91,9 +91,13 @@ returning the entire connection report. A track selector must match exactly
 one sender or receiver; missing or ambiguous matches reject with
 `InvalidAccessError`.
 
+Connection-wide and sender/receiver reports remain available after `close()`.
+Closed endpoints no longer report active RTP streams, and requests already in
+flight still settle after the connection closes.
+
 The WPT runner uses unchanged modern upstream sender/receiver stats tests with
-an isolated helper. Remaining failures (including closed-peer stats and remote
-track readiness) stay visible in the `wpt-results.json` Actions artifact. A green
+an isolated helper. All five sender stats subtests pass. Remaining receiver
+track-readiness failures stay visible in the `wpt-results.json` Actions artifact. A green
 WPT job means the recorded expectations matched, not that every subtest passed.
 
 Examples
