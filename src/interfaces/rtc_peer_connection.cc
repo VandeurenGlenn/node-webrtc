@@ -15,6 +15,7 @@
 #include <webrtc/api/environment/environment_factory.h>
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/api/rtc_error.h>
+#include <webrtc/api/rtp_receiver_interface.h>
 #include <webrtc/api/rtp_transceiver_interface.h>
 #include <webrtc/api/scoped_refptr.h>
 #include <webrtc/p2p/client/basic_port_allocator.h>
@@ -57,6 +58,39 @@
 #include "src/node/utility.h"
 
 namespace node_webrtc {
+
+class ReceiverPacketObserver : public webrtc::RtpReceiverObserverInterface {
+ public:
+  ReceiverPacketObserver(RTCPeerConnection* peer,
+      rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver)
+    : peer(peer), receiver(std::move(receiver)) {
+    this->receiver->SetObserver(this);
+  }
+
+  ~ReceiverPacketObserver() override { receiver->SetObserver(nullptr); }
+
+  // The legacy callback is shared by all receivers of a media type. It is not
+  // evidence that this particular transceiver has started receiving media.
+  void OnFirstPacketReceived(webrtc::MediaType) override {}
+
+  void OnFirstPacketReceivedAfterReceptiveChange(webrtc::MediaType) override {
+    peer->Dispatch(CreateCallback<RTCPeerConnection>([peer = peer, receiver = receiver]() {
+      if (peer->IsClosed()) return;
+      RTCRtpReceiver::wrap()->GetOrCreate(peer->_factory, receiver);
+      MediaStreamTrack::wrap()->GetOrCreate(peer->_factory, receiver->track())->SetMuted(false);
+    }));
+  }
+
+  RTCPeerConnection* peer;
+  rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver;
+};
+
+void RTCPeerConnection::ObserveReceiver(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) {
+  for (const auto& observer : _receiverObservers) {
+    if (observer->receiver == receiver) return;
+  }
+  _receiverObservers.emplace_back(new ReceiverPacketObserver(this, std::move(receiver)));
+}
 
 Napi::FunctionReference& RTCPeerConnection::constructor() {
   static Napi::FunctionReference constructor;
@@ -241,8 +275,12 @@ void RTCPeerConnection::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterfa
 
 void RTCPeerConnection::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) {
   auto receiver = transceiver->receiver();
+  // Register on the signaling thread before returning to native negotiation,
+  // so packets arriving before the JS ontrack handler cannot be missed.
+  ObserveReceiver(receiver);
   auto streams = receiver->streams();
   Dispatch(CreateCallback<RTCPeerConnection>([this, transceiver, receiver, streams]() {
+    if (IsClosed()) return;
     auto mediaStreams = std::vector<MediaStream*>();
     for (auto const& stream : streams) {
       auto mediaStream = MediaStream::wrap()->GetOrCreate(_factory, stream);
@@ -254,6 +292,14 @@ void RTCPeerConnection::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterfa
       streamArray,
       RTCRtpTransceiver::wrap()->GetOrCreate(_factory, transceiver)->Value()
     });
+  }));
+}
+
+void RTCPeerConnection::OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) {
+  Dispatch(CreateCallback<RTCPeerConnection>([this, receiver]() {
+    if (IsClosed()) return;
+    RTCRtpReceiver::wrap()->GetOrCreate(_factory, receiver);
+    MediaStreamTrack::wrap()->GetOrCreate(_factory, receiver->track())->SetMuted(true);
   }));
 }
 
@@ -653,6 +699,9 @@ Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
     _closedSenders = _jinglePeerConnection->GetSenders();
     _closedReceivers = _jinglePeerConnection->GetReceivers();
     _jinglePeerConnection->Close();
+    // Detach after native Close, so an in-flight description cannot register
+    // a new receiver observer between detachment and transport shutdown.
+    _factory->_signalingThread->BlockingCall([this]() { _receiverObservers.clear(); });
     _closedPeerConnection = _jinglePeerConnection;
     _statsFactory = _factory;
     _statsFactory->Ref();
@@ -660,8 +709,8 @@ Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
     // NOTE(mroberts): Perhaps another way to do this is to just register all remote MediaStreamTracks against this
     // RTCPeerConnection, not unlike what we do with RTCDataChannels.
     if (sdpSemantics == webrtc::SdpSemantics::kUnifiedPlan) {
-      for (const auto& transceiver : _jinglePeerConnection->GetTransceivers()) {
-        auto track = MediaStreamTrack::wrap()->GetOrCreate(_factory, transceiver->receiver()->track());
+      for (const auto& receiver : _closedReceivers) {
+        auto track = MediaStreamTrack::wrap()->GetOrCreate(_factory, receiver->track());
         track->OnPeerConnectionClosed();
       }
     }

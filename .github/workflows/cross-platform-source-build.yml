@@ -130,7 +130,7 @@ jobs:
 
       - name: Run tooling tests
         run: |
-          node --test test/benchmark-report.js test/benchmark-provenance.js test/rtp-stats-compatibility.js test/wpt-upstream-stats.js
+          node --test test/benchmark-report.js test/benchmark-provenance.js test/rtp-stats-compatibility.js test/wpt-upstream-stats.js test/install-linux-dependencies.js
           node scripts/summarize-wpt.js "$RUNNER_TEMP/wpt-summary.json"
 
       - name: Audit dependencies
@@ -259,13 +259,13 @@ jobs:
 
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
+        timeout-minutes: 10
+        run: bash scripts/install-linux-dependencies.sh ninja-build libglib2.0-dev libasound2-dev libpulse-dev
 
       - name: Install Linux ARM64 cross compiler
         if: matrix.cross_compile == true
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        timeout-minutes: 10
+        run: bash scripts/install-linux-dependencies.sh gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
       - name: Install build dependencies (macOS)
         if: runner.os == 'macOS'
@@ -428,6 +428,7 @@ jobs:
         run: npm install --ignore-scripts --omit=dev
 
       - name: Compile native addon
+        id: compile-native
         if: steps.native-addon.outputs.run-id == ''
         env:
           ARM_TOOLS_PATH: ${{ matrix.arm_tools_path }}
@@ -440,11 +441,11 @@ jobs:
 
       - name: Stage WebRTC prebuilt
         id: stage-prebuilt
-        if: always() && steps.prebuilt.outputs.run-id == ''
+        if: ${{ !cancelled() && steps.prebuilt.outputs.run-id == '' && (steps.compile-native.outcome == 'success' || steps.compile-native.outcome == 'failure') }}
         run: node scripts/stage-webrtc-prebuilt.js
 
       - name: Preserve WebRTC prebuilt
-        if: always() && steps.prebuilt.outputs.run-id == '' && steps.stage-prebuilt.outcome == 'success'
+        if: ${{ !cancelled() && steps.prebuilt.outputs.run-id == '' && steps.stage-prebuilt.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.prebuilt.outputs.name }}
@@ -458,6 +459,7 @@ jobs:
         run: node -e "const wrtc=require('./'); console.log('wrtc ok', !!wrtc);"
 
       - name: Install test dependencies
+        id: test-dependencies
         if: matrix.cross_compile != true
         run: npm install --ignore-scripts
 
@@ -505,14 +507,15 @@ jobs:
 
       - name: Run Web Platform Tests
         id: wpt
-        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success'
+        if: ${{ !cancelled() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.wpt-hosts.outcome == 'success' }}
         continue-on-error: true
         env:
           WPT_RESULTS_PATH: wpt-status/wpt-results.json
         run: npm run wpt:test
 
       - name: Generate WPT badge status
-        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
+        if: ${{ !cancelled() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true' && steps.test-dependencies.outcome == 'success' }}
+        id: wpt-badge
         shell: bash
         env:
           WPT_HOSTS_OUTCOME: ${{ steps.wpt-hosts.outcome }}
@@ -555,7 +558,7 @@ jobs:
           ' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preserve WPT badge status
-        if: always() && matrix.run_wpt == true && needs.changes.outputs.wpt == 'true'
+        if: ${{ !cancelled() && steps.wpt-badge.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: wpt-status
@@ -666,9 +669,8 @@ jobs:
           node-version: 26
 
       - name: Install Linux runtime dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libglib2.0-dev libasound2-dev libpulse-dev
+        timeout-minutes: 10
+        run: bash scripts/install-linux-dependencies.sh libglib2.0-dev libasound2-dev libpulse-dev
 
       - name: Download tested Linux ARM64 addon
         uses: actions/download-artifact@v7
@@ -762,9 +764,8 @@ jobs:
           node-version: 26
 
       - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libglib2.0-dev libasound2-dev libpulse-dev
+        timeout-minutes: 10
+        run: bash scripts/install-linux-dependencies.sh ninja-build libglib2.0-dev libasound2-dev libpulse-dev
 
       - name: Download matching WebRTC prebuilt
         id: sanitizer-prebuilt
@@ -846,9 +847,8 @@ jobs:
           npm install --ignore-scripts
 
       - name: Install Linux profiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y linux-tools-common linux-tools-generic
+        timeout-minutes: 10
+        run: bash scripts/install-linux-dependencies.sh linux-tools-common linux-tools-generic
 
       - name: Capture binary DataChannel profile
         shell: bash

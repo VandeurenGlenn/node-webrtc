@@ -15,5 +15,11 @@ test selection is changed. The receiver document's no-query URL runs both
 upstream variant groups. These tests cover active, stopped, and closed endpoint
 reports and referenced ICE candidate stats (10 subtests total).
 
+For these two documents only, the headless runner supplies generated audio via
+`stats-media.js` instead of device capture. The tracks, encoders, transports,
+received RTP, stats and events are all real native objects; the fixture changes
+only media input and cleans up sources/timers when the window closes. It does
+not implement or override receiver readiness or stats assertions.
+
 These files are covered by the upstream WPT license in the submodule's
 `LICENSE.md`. The full snapshot and harness migration remains separate.

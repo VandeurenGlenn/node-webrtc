@@ -96,9 +96,17 @@ Closed endpoints no longer report active RTP streams, and requests already in
 flight still settle after the connection closes.
 
 The WPT runner uses unchanged modern upstream sender/receiver stats tests with
-an isolated helper. All five sender stats subtests pass. Remaining receiver
-track-readiness failures stay visible in the `wpt-results.json` Actions artifact. A green
+an isolated helper and generated native audio samples in the headless runner.
+All five sender stats subtests and four of five receiver stats subtests pass.
+The remaining stopped-transceiver receiver stats failure stays visible in the
+`wpt-results.json` Actions artifact. A green
 WPT job means the recorded expectations matched, not that every subtest passed.
+
+Remote receiver tracks start `muted`. The first RTP packet for that transceiver
+unmutes the track and emits an `unmute` event. Removing reception through SDP
+renegotiation emits `mute`; resumed RTP emits `unmute` again. This is independent
+of `enabled`. RTP-inactivity/BYE muting and remote-track clone propagation are
+not implemented yet.
 
 Examples
 --------

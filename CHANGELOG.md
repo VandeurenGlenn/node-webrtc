@@ -15,6 +15,16 @@ New Features
 Bug Fixes
 ---------
 
+- Bound Linux dependency installation, avoid unavailable Azure apt mirrors and
+  skip apt when required packages are already installed; prevent artifact steps
+  from cascading after cancelled setup or missing test dependencies.
+- Initialize receiver tracks as muted and emit native RTP-driven `unmute`
+  events per transceiver; emit `mute` when renegotiation removes reception.
+- Detach receiver observers before close and end all cached receiver tracks;
+  keep track observer teardown on Node's thread and make stop idempotent.
+- Provide generated native audio in the two modern stats WPT fixtures without
+  changing upstream tests; receiver stats now pass 4/5 subtests, with the native
+  stopped-transceiver report failure still visible.
 - Keep native connection and RTP endpoint stats queryable after `close()` and
   deliver pending stats independently of the stopped peer event loop.
 - Release retained closed-peer proxies before factory teardown at process exit;

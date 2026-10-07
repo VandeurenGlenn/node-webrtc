@@ -36,6 +36,9 @@ class MediaStreamTrack
   void OnChanged() override;
 
   void OnPeerConnectionClosed();
+  // Called only on Node's thread. Receiver tracks start muted until RTP arrives.
+  void InitializeRemote();
+  void SetMuted(bool);
 
   bool active() { return _ended ? false : _track->state() == webrtc::MediaStreamTrackInterface::TrackState::kLive; }
   PeerConnectionFactory* factory() { return _factory; }
@@ -68,6 +71,8 @@ class MediaStreamTrack
   Napi::Value JsStop(const Napi::CallbackInfo&);
 
   bool _ended = false;
+  bool _remote = false;
+  bool _muted = false;
   bool _enabled;
   PeerConnectionFactory* _factory;
   rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> _track;

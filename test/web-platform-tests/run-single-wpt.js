@@ -7,7 +7,8 @@ const { it } = require('mocha');
 const { inBrowserContext } = require('./util.js');
 const { JSDOM, VirtualConsole, requestInterceptor } = require('jsdom');
 const wrtc = require('../..');
-const { readStatsResource } = require('./upstream-stats.js');
+const { readStatsResource, isStatsDocument } = require('./upstream-stats.js');
+const { createStatsMedia } = require('./stats-media.js');
 const { readOverride } = require('./wpt-manifest-utils.js');
 
 const reporterPathname = '/resources/testharnessreport.js';
@@ -96,9 +97,14 @@ function createJSDOM(urlPrefix, testPath, expectFail, report) {
       // checks reflect the API's actual return type instead of a realm mismatch.
       window.ArrayBuffer = global.ArrayBuffer;
 
+      const media = isStatsDocument(new URL(window.location.href).pathname) ? createStatsMedia(wrtc) : null;
       window.navigator.mediaDevices = Object.assign({}, window.navigator.mediaDevices, {
-        getUserMedia: wrtc.getUserMedia
+        getUserMedia: media ? media.getUserMedia : wrtc.getUserMedia
       });
+      if (media) {
+        const close = window.close.bind(window);
+        window.close = () => { media.dispose(); close(); };
+      }
 
       window.fetch = function safeFetch() {
         const args = [].slice.call(arguments);

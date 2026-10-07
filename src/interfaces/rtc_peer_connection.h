@@ -8,6 +8,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 
 #include <node-addon-api/napi.h>
 #include <webrtc/api/peer_connection_interface.h>
@@ -30,6 +31,7 @@ namespace node_webrtc {
 
 class RTCDataChannel;
 class PeerConnectionFactory;
+class ReceiverPacketObserver;
 
 class RTCPeerConnection
   : public AsyncObjectWrapWithLoop<RTCPeerConnection>
@@ -57,6 +59,7 @@ class RTCPeerConnection
   void OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
       const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>& streams) override;
   void OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) override;
+  void OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) override;
 
   static void Init(Napi::Env, Napi::Object);
 
@@ -118,6 +121,10 @@ class RTCPeerConnection
   std::vector<rtc::scoped_refptr<webrtc::RtpReceiverInterface>> _closedReceivers;
   PeerConnectionFactory* _statsFactory = nullptr;
   static void ReleaseClosedStats(void*);
+  friend class ReceiverPacketObserver;
+  // Accessed only on the signaling thread; detached before Close releases it.
+  void ObserveReceiver(rtc::scoped_refptr<webrtc::RtpReceiverInterface>);
+  std::vector<std::unique_ptr<ReceiverPacketObserver>> _receiverObservers;
 
   PeerConnectionFactory* _factory;
   bool _shouldReleaseFactory;

@@ -43,6 +43,7 @@ RTCRtpReceiver::RTCRtpReceiver(const Napi::CallbackInfo& info)
   _factory->Ref();
 
   _receiver = std::move(receiver);
+  MediaStreamTrack::wrap()->GetOrCreate(_factory, _receiver->track())->InitializeRemote();
 }
 
 RTCRtpReceiver::~RTCRtpReceiver() {

@@ -35,6 +35,13 @@ const {
 
 inherits(MediaStream, EventTarget);
 inherits(MediaStreamTrack, EventTarget);
+for (const type of ["mute", "unmute"]) {
+  MediaStreamTrack.prototype[`_on${type}`] = function () {
+    const event = new Event(type);
+    Object.defineProperty(event, "target", { value: this, enumerable: true });
+    this._dispatchEvent(event);
+  };
+}
 inherits(RTCAudioSink, EventTarget);
 inherits(RTCDataChannel, EventTarget);
 inherits(RTCDtlsTransport, EventTarget);
