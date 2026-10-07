@@ -56,6 +56,7 @@ MediaStreamTrack::~MediaStreamTrack() {
 }  // NOLINT
 
 void MediaStreamTrack::Stop() {
+  if (_ended) return;
   _track->UnregisterObserver(this);
   _ended = true;
   _enabled = _track->enabled();
@@ -64,8 +65,20 @@ void MediaStreamTrack::Stop() {
 
 void MediaStreamTrack::OnChanged() {
   if (_track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
-    Stop();
+    Dispatch(CreateCallback<MediaStreamTrack>([this]() { Stop(); }));
   }
+}
+
+void MediaStreamTrack::InitializeRemote() {
+  if (_remote) return;
+  _remote = true;
+  _muted = true;
+}
+
+void MediaStreamTrack::SetMuted(bool muted) {
+  if (_ended || _track->state() == webrtc::MediaStreamTrackInterface::kEnded || _muted == muted) return;
+  _muted = muted;
+  MakeCallback(muted ? "_onmute" : "_onunmute", {});
 }
 
 void MediaStreamTrack::OnPeerConnectionClosed() {
@@ -110,7 +123,7 @@ Napi::Value MediaStreamTrack::GetReadyState(const Napi::CallbackInfo& info) {
 }
 
 Napi::Value MediaStreamTrack::GetMuted(const Napi::CallbackInfo& info) {
-  CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), false, result, Napi::Value)
+  CONVERT_OR_THROW_AND_RETURN_NAPI(info.Env(), _muted, result, Napi::Value)
   return result;
 }
 

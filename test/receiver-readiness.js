@@ -1,0 +1,175 @@
+'use strict';
+
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { setTimeout: delay } = require('node:timers/promises');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const wrtc = require('..');
+const { createRTCPeerConnections, negotiate } = require('./lib/pc');
+const { createStatsMedia } = require('./web-platform-tests/stats-media');
+
+async function until(check) {
+  const deadline = Date.now() + 5000;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, 'receiver state change must complete');
+    await delay(10);
+  }
+}
+
+test('closing during native receiver creation detaches observers and exits cleanly', () => {
+  const result = spawnSync(process.execPath, ['--expose-gc', '-e', `
+    const assert = require('node:assert/strict');
+    const wrtc = require('./');
+    (async () => {
+      for (let i = 0; i < 5; i++) {
+        const caller = new wrtc.RTCPeerConnection();
+        const callee = new wrtc.RTCPeerConnection();
+        const source = new wrtc.nonstandard.RTCAudioSource();
+        const track = source.createTrack();
+        caller.addTrack(track);
+        let delivered = 0;
+        callee.ontrack = () => delivered++;
+        const offer = await caller.createOffer();
+        await caller.setLocalDescription(offer);
+        // The SDP promise intentionally need not settle after immediate close.
+        callee.setRemoteDescription(offer);
+        callee.close(); caller.close(); track.stop();
+        await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(delivered, 0, 'no track events after close');
+      }
+      global.gc();
+    })().catch(error => { console.error(error); process.exitCode = 1; });
+  `], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr || String(result.error || 'clean exit'));
+});
+
+test('local tracks remain unmuted and new receiver tracks start muted', t => {
+  const source = new wrtc.nonstandard.RTCAudioSource();
+  const local = source.createTrack();
+  const pc = new wrtc.RTCPeerConnection();
+  t.after(() => { local.stop(); pc.close(); });
+  assert.equal(local.muted, false);
+  local.enabled = false;
+  assert.equal(local.muted, false, 'disabled is not muted');
+  const receiver = pc.addTransceiver('audio').receiver;
+  assert.equal(receiver.track.muted, true);
+  assert.equal(receiver.track.readyState, 'live');
+  pc.close();
+  pc.close();
+  assert.equal(receiver.track.readyState, 'ended');
+});
+
+test('stats media fixture generates actual samples and disposes tracks and timers', async t => {
+  const media = createStatsMedia(wrtc);
+  const stream = await media.getUserMedia({ audio: true });
+  const [track] = stream.getTracks();
+  const sink = new wrtc.nonstandard.RTCAudioSink(track);
+  t.after(() => { sink.stop(); media.dispose(); });
+  const frames = [];
+  sink.ondata = frame => frames.push(frame);
+  await until(() => frames.length > 0);
+  assert.equal(frames[0].sampleRate, 48000);
+  assert.equal(frames[0].numberOfFrames, 480);
+  assert.ok(frames[0].samples.some(sample => sample !== 0));
+  media.dispose();
+  media.dispose();
+  assert.equal(track.readyState, 'ended');
+  await delay(30);
+  const count = frames.length;
+  await delay(30);
+  assert.equal(frames.length, count);
+  await assert.rejects(media.getUserMedia({ audio: true }), /closed/);
+});
+
+test('video receiver readiness follows actual RTP and remains ended after stop',
+  { timeout: 10000 }, async t => {
+    const [caller, callee] = createRTCPeerConnections();
+    const source = new wrtc.nonstandard.RTCVideoSource();
+    const local = source.createTrack();
+    caller.addTrack(local);
+    let remote;
+    let initial;
+    const events = [];
+    let timer;
+    t.after(() => {
+      clearInterval(timer);
+      caller.close(); callee.close(); local.stop();
+    });
+    callee.ontrack = ({ track }) => {
+      remote = track;
+      initial = track.muted;
+      track.onunmute = event => events.push(event);
+    };
+    await negotiate(caller, callee);
+    assert.equal(initial, true);
+    const frame = { width: 16, height: 16, data: new Uint8ClampedArray(16 * 16 * 3 / 2) };
+    timer = setInterval(() => source.onFrame(frame), 20);
+    await until(() => remote.muted === false);
+    assert.equal(events.length, 1);
+    assert.equal(events[0].target, remote);
+    assert.ok(events[0] instanceof Event);
+    remote.stop();
+    remote.stop();
+    await delay(40);
+    assert.equal(remote.readyState, 'ended');
+    assert.equal(events.length, 1);
+  });
+
+test('RTP unmutes only the receiving track, then remote removal mutes it and resume unmutes it',
+  { timeout: 15000 }, async t => {
+    const [caller, callee] = createRTCPeerConnections();
+    const sources = [new wrtc.nonstandard.RTCAudioSource(), new wrtc.nonstandard.RTCAudioSource()];
+    const locals = sources.map(source => source.createTrack());
+    const transceivers = locals.map(track => caller.addTransceiver(track));
+    const remote = [];
+    const initial = [];
+    const events = [];
+    let timer;
+    t.after(() => {
+      clearInterval(timer);
+      caller.close(); callee.close(); locals.forEach(track => track.stop());
+    });
+    callee.ontrack = ({ track }) => {
+      if (remote.includes(track)) return;
+      initial.push(track.muted);
+      remote.push(track);
+      for (const type of ['mute', 'unmute']) track.addEventListener(type, event => {
+        events.push({ track, event, muted: track.muted });
+      });
+    };
+    const frame = { samples: new Int16Array(480), sampleRate: 48000,
+      bitsPerSample: 16, channelCount: 1, numberOfFrames: 480 };
+    // Generate media before negotiation completes, covering first packets
+    // arriving before the queued JS ontrack callback is delivered.
+    timer = setInterval(() => sources[0].onData(frame), 10);
+    await negotiate(caller, callee);
+    assert.equal(remote.length, 2);
+    assert.deepEqual(initial, [true, true], 'ontrack precedes unmute');
+    await until(() => remote[0].muted === false);
+    await delay(100);
+    assert.equal(remote[1].muted, true, 'another audio receiver must not unmute without RTP');
+    assert.equal(events.length, 1, 'continued packets do not repeat unmute');
+    assert.equal(events[0].track, remote[0]);
+    assert.equal(events[0].event.type, 'unmute');
+    assert.ok(events[0].event instanceof Event);
+    assert.equal(events[0].event.target, remote[0]);
+    assert.equal(events[0].muted, false);
+    const report = await callee.getReceivers()[0].getStats();
+    assert.ok([...report.values()].some(stat => stat.type === 'inbound-rtp' && stat.packetsReceived > 0));
+    transceivers[0].direction = 'inactive';
+    await negotiate(caller, callee);
+    await until(() => remote[0].muted === true);
+    assert.equal(events.at(-1).event.type, 'mute');
+    assert.equal(events.at(-1).muted, true);
+    assert.equal(remote[0].readyState, 'live');
+    transceivers[0].direction = 'sendrecv';
+    await negotiate(caller, callee);
+    await until(() => remote[0].muted === false);
+    assert.deepEqual(events.map(({ event }) => event.type), ['unmute', 'mute', 'unmute']);
+    clearInterval(timer);
+    callee.close();
+    await delay(20);
+    assert.equal(remote[0].readyState, 'ended');
+    assert.equal(events.length, 3, 'close must not dispatch queued unmute events');
+  });

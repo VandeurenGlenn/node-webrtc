@@ -79,7 +79,7 @@ RTCRtpParameters-headerExtensions.html: [fail, "pc.addTransceiver is not a funct
 RTCRtpParameters-rtcp.html: [fail, "pc.addTransceiver is not a function"]
 RTCRtpParameters-transactionId.html: [fail, "pc.addTransceiver is not a function"]
 RTCRtpReceiver-getParameters.html: [fail, "RID stuff"]
-RTCRtpReceiver-getStats.https.html: [fail, "Modern upstream: receiver muted state does not wait for RTP"]
+RTCRtpReceiver-getStats.https.html: [fail, "Modern upstream: M154 retains inbound-rtp stats after transceiver.stop() before renegotiation"]
 RTCRtpReceiver-getSynchronizationSources.https.html: [fail-slow]
 RTCRtpSender-setStreams.https.html: [fail, "IDK"]
 RTCRtpTransceiver-stop.html: [fail, "Pinned WPT expects a stopped sendonly transceiver to remain sendonly; current WebRTC requires a rejected m-section"]

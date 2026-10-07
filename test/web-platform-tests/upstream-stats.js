@@ -8,6 +8,7 @@ const documents = new Set([
   '/webrtc/RTCRtpReceiver-getStats.https.html'
 ]);
 const helper = '/webrtc/stats/RTCPeerConnection-helper.js';
+exports.isStatsDocument = pathname => documents.has(pathname);
 
 exports.readStatsResource = pathname => {
   if (!documents.has(pathname) && pathname !== helper) return undefined;

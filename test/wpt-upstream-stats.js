@@ -7,7 +7,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
-const { readStatsResource } = require("./web-platform-tests/upstream-stats");
+const { readStatsResource, isStatsDocument } = require("./web-platform-tests/upstream-stats");
 
 test("modern stats WPTs and helper remain byte-for-byte upstream copies", () => {
   const hashes = {
@@ -46,6 +46,7 @@ test("modern stats resource routing isolates the helper without changing asserti
   for (const type of ["Sender", "Receiver"]) {
     const filename = "/webrtc/RTCRtp" + type + "-getStats.https.html";
     const resource = readStatsResource(filename);
+    assert.equal(isStatsDocument(filename), true);
     const upstream = fs.readFileSync(path.join(__dirname, "web-platform-tests/overrides", filename), "utf8");
     assert.equal(resource.contentType, "text/html");
     assert.equal(resource.body.replace('src="stats/RTCPeerConnection-helper.js"',
@@ -55,6 +56,9 @@ test("modern stats resource routing isolates the helper without changing asserti
   assert.equal(readStatsResource("/webrtc/stats/RTCPeerConnection-helper.js").contentType,
     "application/javascript");
   for (const filename of ["/webrtc/RTCPeerConnection-helper.js", "/resources/testharness.js",
-    "/webrtc/RTCPeerConnection-getStats.https.html", "/../upstream-stats.js"])
+    "/webrtc/RTCPeerConnection-getStats.https.html", "/../upstream-stats.js"]) {
     assert.equal(readStatsResource(filename), undefined);
+    assert.equal(isStatsDocument(filename), false);
+  }
+  assert.equal(isStatsDocument('/webrtc/stats/RTCPeerConnection-helper.js'), false);
 });
