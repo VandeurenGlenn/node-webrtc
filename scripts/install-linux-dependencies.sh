@@ -32,6 +32,15 @@ for source in "$sources_directory/sources.list" "$sources_directory"/sources.lis
   fi
 done
 
+# Newer hosted runners use mirror+file:/etc/apt/apt-mirrors.txt rather
+# than putting the Azure URL in sources.list or ubuntu.sources. Remove the
+# failing Azure entry, retaining the existing signed Ubuntu fallback mirrors.
+for mirror in "$sources_directory"/apt-mirrors*.txt; do
+  if [[ -f "$mirror" ]]; then
+    sudo sed -i -E '/azure\.archive\.ubuntu\.com/d' "$mirror"
+  fi
+done
+
 options=(
   -o Acquire::Retries=2
   -o Acquire::http::Timeout=20

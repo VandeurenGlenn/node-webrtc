@@ -18,7 +18,15 @@ function runInstaller(t, packages, options = {}) {
   fs.mkdirSync(bin);
   fs.mkdirSync(path.join(sources, 'sources.list.d'), { recursive: true });
   const source = path.join(sources, 'sources.list.d', 'ubuntu.sources');
-  fs.writeFileSync(source, 'URIs: http://azure.archive.ubuntu.com/ubuntu\nSuites: noble\n');
+  const mirror = path.join(sources, 'apt-mirrors.txt');
+  const sourceBody = options.mirrorList
+    ? `URIs: mirror+file:${mirror}\nSuites: noble\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n`
+    : 'URIs: http://azure.archive.ubuntu.com/ubuntu\nSuites: noble\n';
+  fs.writeFileSync(source, sourceBody);
+  if (options.mirrorList) fs.writeFileSync(mirror,
+    'http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n' +
+    'https://archive.ubuntu.com/ubuntu/\tpriority:2\n' +
+    'https://security.ubuntu.com/ubuntu/\tpriority:3\n');
   const mock = `#!/usr/bin/env node
     const fs = require('node:fs');
     const path = require('node:path');
@@ -34,6 +42,12 @@ function runInstaller(t, packages, options = {}) {
       const child = command === 'sudo' ? args : args.slice(3);
       const result = spawnSync(child[0], child.slice(1), { stdio: 'inherit' });
       process.exitCode = result.status ?? 1;
+    } else if (command === 'sed') {
+      // Execute the real, portable regex transform on a temporary fixture.
+      // Only emulate GNU in-place editing, which differs on macOS.
+      const result = spawnSync('/usr/bin/sed', ['-E', args[2], args[3]], { encoding: 'utf8' });
+      if (result.status === 0) fs.writeFileSync(args[3], result.stdout);
+      else { process.stderr.write(result.stderr); process.exitCode = result.status ?? 1; }
     } else if (command === 'apt-get' && args.includes('update') && process.env.APT_TEST_FAIL_UPDATE === '1') {
       process.exitCode = 9;
     }
@@ -50,7 +64,7 @@ function runInstaller(t, packages, options = {}) {
     { cwd: root, env, encoding: 'utf8', timeout: 10000 });
   const commands = fs.existsSync(log)
     ? fs.readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
-  return { result, commands, source };
+  return { result, commands, source, mirror, sourceBody };
 }
 
 test('Linux installer skips apt when every requested dependency is installed',
@@ -70,6 +84,7 @@ test('Linux installer bounds apt operations, replaces Azure sources and installs
     const rewrite = commands.find(({ command }) => command === 'sed');
     assert.deepEqual(rewrite.args, ['-i', '-E',
       's|https?://azure\\.archive\\.ubuntu\\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g', source]);
+    assert.equal(fs.readFileSync(source, 'utf8'), 'URIs: https://archive.ubuntu.com/ubuntu\nSuites: noble\n');
     const bounds = commands.filter(({ command }) => command === 'timeout');
     assert.deepEqual(bounds.map(({ args }) => args.slice(0, 3)), [
       ['--signal=TERM', '--kill-after=15s', '180s'],
@@ -84,6 +99,18 @@ test('Linux installer bounds apt operations, replaces Azure sources and installs
     }
     assert.equal(apt[0].args.at(-1), 'update');
     assert.deepEqual(apt[1].args.slice(-4), ['install', '-y', '--no-install-recommends', 'libasound2-dev']);
+  });
+
+test('Linux installer removes Azure from hosted mirror+file lists without changing source signatures or suites',
+  { skip: process.platform === 'win32' }, t => {
+    const { result, commands, source, mirror, sourceBody } = runInstaller(t, ['libasound2-dev'], { mirrorList: true });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.readFileSync(source, 'utf8'), sourceBody);
+    assert.equal(fs.readFileSync(mirror, 'utf8'),
+      'https://archive.ubuntu.com/ubuntu/\tpriority:2\n' +
+      'https://security.ubuntu.com/ubuntu/\tpriority:3\n');
+    const rewrite = commands.find(({ command, args }) => command === 'sed' && args.at(-1) === mirror);
+    assert.deepEqual(rewrite.args, ['-i', '-E', '/azure\\.archive\\.ubuntu\\.com/d', mirror]);
   });
 
 test('Linux installer fails on index refresh errors without continuing to install',
