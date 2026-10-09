@@ -10,6 +10,7 @@ if [ ! -d "$webrtc_dir" ]; then
     python_bin=python3
   fi
   "$python_bin" "$script_dir/patch-webrtc-modern-cpp.py" "$1"
+  "$python_bin" "$script_dir/patch-webrtc-stopped-stats.py" "$1"
   PYTHON_BIN="$python_bin" "$script_dir/patch-webrtc-media-defaults.sh" "$1"
   if [ "$(uname -s)" = "Darwin" ]; then
     if xcodebuild -version >/dev/null 2>&1; then

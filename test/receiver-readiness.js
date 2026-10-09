@@ -17,6 +17,48 @@ async function until(check) {
   }
 }
 
+for (const [kind, cached] of [['audio', true], ['audio', false], ['video', true], ['video', false]]) {
+  test(`${kind} stopped receiver stats preserve ${cached ? 'cached' : 'pending'} pre-stop requests and other active receivers`,
+    { timeout: 15000 }, async t => {
+      const [caller, callee] = createRTCPeerConnections();
+      const Source = kind === 'audio' ? wrtc.nonstandard.RTCAudioSource : wrtc.nonstandard.RTCVideoSource;
+      const sources = [new Source(), new Source()];
+      const tracks = sources.map(source => source.createTrack());
+      tracks.forEach(track => caller.addTrack(track));
+      const frame = kind === 'audio'
+        ? { samples: new Int16Array(480), sampleRate: 48000,
+          bitsPerSample: 16, channelCount: 1, numberOfFrames: 480 }
+        : { width: 16, height: 16, data: new Uint8ClampedArray(16 * 16 * 3 / 2) };
+      const timer = setInterval(() => sources.forEach(source => {
+        if (kind === 'audio') source.onData(frame);
+        else source.onFrame(frame);
+      }), kind === 'audio' ? 10 : 20);
+      t.after(() => {
+        clearInterval(timer);
+        caller.close(); callee.close(); tracks.forEach(track => track.stop());
+      });
+      await negotiate(caller, callee);
+      const [stopping, active] = callee.getTransceivers();
+      await until(() => !stopping.receiver.track.muted && !active.receiver.track.muted);
+      const inbound = report => [...report.values()].filter(stat => stat.type === 'inbound-rtp');
+      const primed = await stopping.receiver.getStats();
+      assert.equal(inbound(primed).length, 1);
+      // Exercise both fresh cached reports and an in-flight uncached collection.
+      if (!cached) await delay(100);
+      const beforeStop = stopping.receiver.getStats();
+      stopping.stop();
+      stopping.stop();
+      const afterStop = stopping.receiver.getStats();
+      const connectionAfterStop = callee.getStats();
+      assert.equal(inbound(await beforeStop).length, 1, 'pre-stop snapshot remains available');
+      assert.equal(inbound(await afterStop).length, 0, 'post-stop request cannot join stale collection');
+      assert.equal(inbound(await stopping.receiver.getStats()).length, 0, 'cache remains stopped');
+      assert.equal(inbound(await connectionAfterStop).length, 1, 'other receiver remains in full report');
+      assert.equal(inbound(await active.receiver.getStats()).length, 1);
+      assert.equal(stopping.receiver.track.readyState, 'ended');
+    });
+}
+
 test('closing during native receiver creation detaches observers and exits cleanly', () => {
   const result = spawnSync(process.execPath, ['--expose-gc', '-e', `
     const assert = require('node:assert/strict');
