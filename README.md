@@ -94,12 +94,14 @@ one sender or receiver; missing or ambiguous matches reject with
 Connection-wide and sender/receiver reports remain available after `close()`.
 Closed endpoints no longer report active RTP streams, and requests already in
 flight still settle after the connection closes.
+Calling `transceiver.stop()` removes that transceiver's RTP streams from new
+stats reports without requiring renegotiation. Requests started before stopping
+retain their snapshot; other active transceivers remain visible.
 
 The WPT runner uses unchanged modern upstream sender/receiver stats tests with
 an isolated helper and generated native audio samples in the headless runner.
-All five sender stats subtests and four of five receiver stats subtests pass.
-The remaining stopped-transceiver receiver stats failure stays visible in the
-`wpt-results.json` Actions artifact. A green
+All five sender stats subtests and all five receiver stats subtests pass.
+Actual subtest results remain available in the `wpt-results.json` Actions artifact. A green
 WPT job means the recorded expectations matched, not that every subtest passed.
 
 Remote receiver tracks start `muted`. The first RTP packet for that transceiver
