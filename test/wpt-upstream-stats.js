@@ -8,6 +8,17 @@ const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const { createHash } = require("node:crypto");
 const { readStatsResource, isStatsDocument } = require("./web-platform-tests/upstream-stats");
+const { usesGeneratedAudio } = require("./web-platform-tests/stats-media");
+
+test('generated audio is restricted to the stats and remote-track mute documents', () => {
+  for (const file of ['RTCRtpSender-getStats', 'RTCRtpReceiver-getStats', 'RTCPeerConnection-remote-track-mute']) {
+    assert.equal(usesGeneratedAudio(`/webrtc/${file}.https.html`), true);
+  }
+  for (const file of ['/webrtc/RTCPeerConnection-helper.js', '/webrtc/RTCPeerConnection-getStats.https.html',
+    '/webrtc/RTCPeerConnection-remote-track-mute.https.html/extra']) {
+    assert.equal(usesGeneratedAudio(file), false);
+  }
+});
 
 test("modern stats WPTs and helper remain byte-for-byte upstream copies", () => {
   const hashes = {

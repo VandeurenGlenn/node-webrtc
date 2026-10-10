@@ -77,7 +77,14 @@ class ReceiverPacketObserver : public webrtc::RtpReceiverObserverInterface {
     peer->Dispatch(CreateCallback<RTCPeerConnection>([peer = peer, receiver = receiver]() {
       if (peer->IsClosed()) return;
       RTCRtpReceiver::wrap()->GetOrCreate(peer->_factory, receiver);
-      MediaStreamTrack::wrap()->GetOrCreate(peer->_factory, receiver->track())->SetMuted(false);
+      peer->ReceiverTrack(receiver)->SetMuted(false);
+    }));
+  }
+
+  void OnByeReceived(webrtc::MediaType) override {
+    peer->Dispatch(CreateCallback<RTCPeerConnection>([peer = peer, receiver = receiver]() {
+      if (peer->IsClosed()) return;
+      peer->ReceiverTrack(receiver)->SetMuted(true);
     }));
   }
 
@@ -90,6 +97,16 @@ void RTCPeerConnection::ObserveReceiver(rtc::scoped_refptr<webrtc::RtpReceiverIn
     if (observer->receiver == receiver) return;
   }
   _receiverObservers.emplace_back(new ReceiverPacketObserver(this, std::move(receiver)));
+}
+
+MediaStreamTrack* RTCPeerConnection::ReceiverTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) {
+  auto track = MediaStreamTrack::wrap()->GetOrCreate(_factory, receiver->track());
+  track->InitializeRemote();
+  for (auto& reference : _receiverTracks) {
+    if (MediaStreamTrack::Unwrap(reference.Value()) == track) return track;
+  }
+  _receiverTracks.push_back(Napi::Persistent(track->Value()));
+  return track;
 }
 
 Napi::FunctionReference& RTCPeerConnection::constructor() {
@@ -281,6 +298,7 @@ void RTCPeerConnection::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterfa
   auto streams = receiver->streams();
   Dispatch(CreateCallback<RTCPeerConnection>([this, transceiver, receiver, streams]() {
     if (IsClosed()) return;
+    ReceiverTrack(receiver);
     auto mediaStreams = std::vector<MediaStream*>();
     for (auto const& stream : streams) {
       auto mediaStream = MediaStream::wrap()->GetOrCreate(_factory, stream);
@@ -299,7 +317,7 @@ void RTCPeerConnection::OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInte
   Dispatch(CreateCallback<RTCPeerConnection>([this, receiver]() {
     if (IsClosed()) return;
     RTCRtpReceiver::wrap()->GetOrCreate(_factory, receiver);
-    MediaStreamTrack::wrap()->GetOrCreate(_factory, receiver->track())->SetMuted(true);
+    ReceiverTrack(receiver)->SetMuted(true);
   }));
 }
 
@@ -717,6 +735,7 @@ Napi::Value RTCPeerConnection::Close(const Napi::CallbackInfo& info) {
     for (auto channel : _channels) {
       channel->OnPeerConnectionClosed();
     }
+    _receiverTracks.clear();
   }
 
   _jinglePeerConnection = nullptr;

@@ -3,6 +3,13 @@
 // Headless equivalents of the upstream helper's generated noise stream. These
 // are real native tracks: samples still pass through encoding, ICE, DTLS and
 // RTP. Never substitute stats, receiver state, events or upstream assertions.
+const generatedAudioDocuments = new Set([
+  '/webrtc/RTCRtpSender-getStats.https.html',
+  '/webrtc/RTCRtpReceiver-getStats.https.html',
+  '/webrtc/RTCPeerConnection-remote-track-mute.https.html'
+]);
+exports.usesGeneratedAudio = pathname => generatedAudioDocuments.has(pathname);
+
 exports.createStatsMedia = wrtc => {
   const active = new Set();
   let disposed = false;

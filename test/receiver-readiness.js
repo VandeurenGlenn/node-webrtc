@@ -17,6 +17,120 @@ async function until(check) {
   }
 }
 
+for (const kind of ['audio', 'video']) {
+  test(`${kind} remote clones share mute events and matching BYE without coupling track stop`,
+    { timeout: 15000 }, async t => {
+      const [caller, callee] = createRTCPeerConnections();
+      const Source = kind === 'audio' ? wrtc.nonstandard.RTCAudioSource : wrtc.nonstandard.RTCVideoSource;
+      const sources = [new Source(), new Source()];
+      const tracks = sources.map(source => source.createTrack());
+      const senders = tracks.map(track => caller.addTransceiver(track));
+      const remote = [];
+      const clones = [];
+      const events = [];
+      let timer;
+      t.after(() => {
+        clearInterval(timer);
+        caller.close(); callee.close();
+        [...tracks, ...clones].forEach(track => track.stop());
+      });
+      const watch = track => {
+        for (const type of ['mute', 'unmute']) track.addEventListener(type, event => {
+          assert.equal(event.target, track);
+          assert.equal(track.muted, type === 'mute');
+          events.push({ track, type });
+        });
+      };
+      callee.ontrack = ({ track }) => {
+        if (remote.includes(track)) return;
+        remote.push(track);
+        watch(track);
+        if (remote.length === 1) {
+          const clone = track.clone();
+          const nested = clone.clone();
+          clones.push(clone, nested);
+          clones.forEach(watch);
+          assert.ok(clones.every(track => track.muted), 'clones start with source mute state');
+          assert.notEqual(clone.id, track.id);
+          assert.notEqual(nested.id, clone.id);
+        }
+      };
+      await negotiate(caller, callee);
+      const frame = kind === 'audio'
+        ? { samples: new Int16Array(480), sampleRate: 48000,
+          bitsPerSample: 16, channelCount: 1, numberOfFrames: 480 }
+        : { width: 16, height: 16, data: new Uint8ClampedArray(16 * 16 * 3 / 2) };
+      timer = setInterval(() => sources.forEach(source => {
+        if (kind === 'audio') source.onData(frame);
+        else source.onFrame(frame);
+      }), kind === 'audio' ? 10 : 20);
+      await until(() => [...remote, ...clones].every(track => !track.muted));
+      assert.equal(events.filter(({ type }) => type === 'unmute').length, 4);
+      remote[0].enabled = false;
+      const disabledClone = remote[0].clone();
+      clones.push(disabledClone);
+      assert.equal(disabledClone.enabled, false, 'clone inherits enabled without sharing it');
+      disabledClone.enabled = true;
+      assert.equal(remote[0].enabled, false);
+      assert.equal(disabledClone.muted, false);
+      watch(disabledClone);
+      const stopped = clones[0];
+      // Reentrant handlers see coherent state and can stop a sibling safely.
+      remote[0].onmute = () => {
+        assert.ok(clones.every(track => track.muted));
+        stopped.stop();
+        global.gc?.();
+      };
+      senders[0].direction = 'inactive';
+      await negotiate(caller, callee);
+      await until(() => remote[0].muted && clones[1].muted && disabledClone.muted);
+      assert.equal(remote[1].muted, false, 'other receiver must not mute');
+      assert.equal(stopped.readyState, 'ended');
+      assert.equal(events.filter(({ track, type }) => track === stopped && type === 'mute').length, 0);
+      const late = clones[1].clone();
+      clones.push(late);
+      watch(late);
+      assert.equal(late.muted, true, 'clone of muted clone inherits source state');
+      remote[0].onmute = null;
+      // Source notifications must still reach clones after stopping the original.
+      remote[0].stop();
+      senders[0].direction = 'sendrecv';
+      await negotiate(caller, callee);
+      const live = [clones[1], disabledClone, late];
+      await until(() => live.every(track => !track.muted));
+      assert.equal(stopped.muted, true, 'stopped clone freezes its mute state');
+      assert.equal(remote[0].readyState, 'ended');
+      assert.equal(remote[0].muted, true, 'stopped original freezes its mute state');
+      const endedClone = remote[0].clone();
+      clones.push(endedClone);
+      assert.equal(endedClone.readyState, 'ended');
+      assert.equal(endedClone.enabled, false);
+      assert.equal(endedClone.muted, true);
+      const original = new WeakRef(remote[0]);
+      for (let i = events.length - 1; i >= 0; --i) {
+        if (events[i].track === remote[0]) events.splice(i, 1);
+      }
+      remote[0] = null;
+      await delay(0);
+      global.gc?.();
+      assert.ok(original.deref(), 'peer retains stopped receiver-track identity');
+      assert.equal(callee.getReceivers()[0].track, original.deref());
+      const eventsBeforeBye = events.length;
+      senders[0].stop();
+      await until(() => live.every(track => track.muted));
+      assert.ok(live.every(track => track.readyState === 'live'), 'BYE mutes, not ends, remote sources');
+      assert.equal(events.length - eventsBeforeBye, 3, 'one BYE mute per live clone');
+      assert.equal(remote[1].muted, false, 'BUNDLE BYE only mutes matching receiver');
+      caller.close();
+      await until(() => remote[1].muted);
+      const eventsBeforeClose = events.length;
+      callee.close();
+      await until(() => live.every(track => track.readyState === 'ended'));
+      await delay(40);
+      assert.equal(events.length, eventsBeforeClose, 'no mute/unmute after local close');
+    });
+}
+
 for (const [kind, cached] of [['audio', true], ['audio', false], ['video', true], ['video', false]]) {
   test(`${kind} stopped receiver stats preserve ${cached ? 'cached' : 'pending'} pre-stop requests and other active receivers`,
     { timeout: 15000 }, async t => {

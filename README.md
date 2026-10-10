@@ -106,9 +106,17 @@ WPT job means the recorded expectations matched, not that every subtest passed.
 
 Remote receiver tracks start `muted`. The first RTP packet for that transceiver
 unmutes the track and emits an `unmute` event. Removing reception through SDP
-renegotiation emits `mute`; resumed RTP emits `unmute` again. This is independent
-of `enabled`. RTP-inactivity/BYE muting and remote-track clone propagation are
-not implemented yet.
+renegotiation or receiving an authenticated RTCP BYE for that source emits
+`mute`; resumed RTP emits `unmute` again. `transceiver.stop()` and `close()` send
+BYE before transport teardown. A BYE for another bundled receiver does not mute
+unrelated tracks.
+
+Remote clones share source mute state and receive their own `mute`/`unmute`
+events. Clones inherit `enabled`, then control it independently. Stopping an
+individual track does not stop its live siblings, including clones of clones;
+ended tracks no longer receive source mute events. No general RTP-inactivity
+timer is used. All five remote-track-mute WPT subtests pass with generated native
+audio, without changing upstream assertions.
 
 Examples
 --------

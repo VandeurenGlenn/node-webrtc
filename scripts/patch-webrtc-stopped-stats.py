@@ -61,13 +61,13 @@ def replacements():
     }
 
 
-def patch(source_root):
+def patch(source_root, edits=None):
     pending = []
     # Validate every anchor before modifying any file; unknown revisions fail closed.
-    for filename, edits in replacements().items():
+    for filename, file_edits in (replacements() if edits is None else edits).items():
         path = source_root / filename
         original = content = path.read_text()
-        for before, after in edits:
+        for before, after in file_edits:
             if content.count(after) == 1:
                 continue
             if content.count(before) != 1:
@@ -77,7 +77,7 @@ def patch(source_root):
     for path, original, content in pending:
         if content != original:
             path.write_text(content)
-            print(f"Patched stopped-transceiver stats in {path}")
+            print(f"Patched WebRTC compatibility in {path}")
 
 
 if __name__ == "__main__":
