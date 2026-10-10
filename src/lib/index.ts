@@ -12,6 +12,7 @@ import RTCPeerConnection from "./peerconnection.js";
 import RTCPeerConnectionIceEvent from "./rtcpeerconnectioniceevent.js";
 import RTCSessionDescription from "./sessiondescription.js";
 import RTCTrackEvent from "./rtctrackevent.js";
+import installTrackConstraints from "./trackconstraints.js";
 
 const {
   MediaStream,
@@ -35,11 +36,19 @@ const {
 
 inherits(MediaStream, EventTarget);
 inherits(MediaStreamTrack, EventTarget);
-for (const type of ["mute", "unmute"]) {
+for (const type of ["mute", "unmute", "ended"]) {
   MediaStreamTrack.prototype[`_on${type}`] = function () {
     const event = new Event(type);
     Object.defineProperty(event, "target", { value: this, enumerable: true });
     this._dispatchEvent(event);
+  };
+}
+installTrackConstraints(MediaStreamTrack);
+if (typeof MediaStream.prototype._clone === "function") {
+  // Stream cloning must use the same track-cloning path: enabled/ended state,
+  // remote source membership, settings and independent constraints included.
+  MediaStream.prototype.clone = function clone() {
+    return new MediaStream(this.getTracks().map(track => track.clone()));
   };
 }
 inherits(RTCAudioSink, EventTarget);

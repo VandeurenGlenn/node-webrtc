@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include <node-addon-api/napi.h>
@@ -25,7 +26,8 @@ class PeerConnectionFactory;
 
 class MediaStreamTrack
   : public AsyncObjectWrapWithLoop<MediaStreamTrack>
-  , public webrtc::ObserverInterface {
+  , public webrtc::ObserverInterface
+  , public webrtc::VideoSinkInterface<webrtc::VideoFrame> {
  public:
   explicit MediaStreamTrack(const Napi::CallbackInfo&);
 
@@ -35,6 +37,7 @@ class MediaStreamTrack
 
   // ObserverInterface
   void OnChanged() override;
+  void OnFrame(const webrtc::VideoFrame&) override;
 
   void OnPeerConnectionClosed();
   // Called only on Node's thread. Receiver tracks start muted until RTP arrives.
@@ -67,11 +70,19 @@ class MediaStreamTrack
   Napi::Value GetKind(const Napi::CallbackInfo&);
   Napi::Value GetReadyState(const Napi::CallbackInfo&);
   Napi::Value GetMuted(const Napi::CallbackInfo&);
+  Napi::Value GetSettings(const Napi::CallbackInfo&);
+  Napi::Value GetRemote(const Napi::CallbackInfo&);
+  void End();
 
   Napi::Value Clone(const Napi::CallbackInfo&);
   Napi::Value JsStop(const Napi::CallbackInfo&);
 
   bool _ended = false;
+  std::mutex _settingsMutex;
+  int _width = 0;
+  int _height = 0;
+  int64_t _lastFrameTimestamp = 0;
+  double _frameRate = 0;
   // Node-thread-only source state shared by remote clones. Membership does not
   // own wrappers; stopped tracks detach before their event-loop ref is released.
   struct RemoteSourceState {
