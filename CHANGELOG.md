@@ -15,6 +15,13 @@ New Features
 Bug Fixes
 ---------
 
+- Share remote-track source mute state across clones while preserving independent
+  enabled/stop state and stable receiver-track identity; root event recipients
+  before invoking reentrant handlers.
+- Send authenticated compound RTCP BYE for stopped RTP sources before transport
+  teardown, release stopped send streams, and forward matching received BYE to
+  live receiver tracks and clones. Remove the expected failure for all five
+  unchanged remote-track-mute WPT subtests, using generated native audio.
 - Recognize stopping transceivers in native M154 RTP stats and invalidate cached
   reports on RTP changes. Preserve pre-change requests while collecting fresh
   reports for post-change requests; the unchanged modern sender/receiver stats

@@ -32,6 +32,7 @@ namespace node_webrtc {
 class RTCDataChannel;
 class PeerConnectionFactory;
 class ReceiverPacketObserver;
+class MediaStreamTrack;
 
 class RTCPeerConnection
   : public AsyncObjectWrapWithLoop<RTCPeerConnection>
@@ -125,6 +126,9 @@ class RTCPeerConnection
   // Accessed only on the signaling thread; detached before Close releases it.
   void ObserveReceiver(rtc::scoped_refptr<webrtc::RtpReceiverInterface>);
   std::vector<std::unique_ptr<ReceiverPacketObserver>> _receiverObservers;
+  // Preserve receiver-track identity even if JS stops it while clones remain.
+  MediaStreamTrack* ReceiverTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface>);
+  std::vector<Napi::ObjectReference> _receiverTracks;
 
   PeerConnectionFactory* _factory;
   bool _shouldReleaseFactory;

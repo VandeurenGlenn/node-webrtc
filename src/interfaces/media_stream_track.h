@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <node-addon-api/napi.h>
 #include <webrtc/api/media_stream_interface.h>
@@ -71,7 +72,13 @@ class MediaStreamTrack
   Napi::Value JsStop(const Napi::CallbackInfo&);
 
   bool _ended = false;
-  bool _remote = false;
+  // Node-thread-only source state shared by remote clones. Membership does not
+  // own wrappers; stopped tracks detach before their event-loop ref is released.
+  struct RemoteSourceState {
+    bool muted = true;
+    std::vector<MediaStreamTrack*> tracks;
+  };
+  std::shared_ptr<RemoteSourceState> _remoteSource;
   bool _muted = false;
   bool _enabled;
   PeerConnectionFactory* _factory;

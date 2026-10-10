@@ -276,7 +276,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_BASE: libwebrtc-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
+          ARTIFACT_BASE: libwebrtc-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', matrix.webrtc_config, format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-remote-bye.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2, 'scripts/stage-webrtc-prebuilt.js') }}
           LEGACY_ARTIFACT_NAME: ${{ matrix.legacy_artifact }}
         run: |
           ARTIFACT_NAME="$ARTIFACT_BASE-${ImageOS:-unknown}"
@@ -367,7 +367,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_BASE: native-addon-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
+          ARTIFACT_BASE: native-addon-${{ matrix.artifact_os || runner.os }}-${{ matrix.artifact_arch || runner.arch }}-node${{ matrix.node }}-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', matrix.webrtc_config, 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', format('scripts/download-webrtc.{0}', matrix.script_suffix), format('scripts/configure-webrtc.{0}', matrix.script_suffix), format('scripts/build-webrtc.{0}', matrix.script_suffix), 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-remote-bye.py', 'scripts/patch-webrtc-media-defaults.sh', matrix.platform_patch_1, matrix.platform_patch_2) }}
           PRODUCER_JOB: ${{ matrix.label || matrix.os }} / node ${{ matrix.node }}
         run: |
           artifact_name="$ARTIFACT_BASE-${ImageOS:-unknown}"
@@ -704,7 +704,7 @@ jobs:
         id: native-addon-cache
         shell: bash
         run: |
-          echo "name=native-addon-Linux-ARM64-node26-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-media-defaults.sh') }}-${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "name=native-addon-Linux-ARM64-node26-${{ hashFiles('CMakeLists.txt', 'cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'src/**', 'package.json', 'package-lock.json', 'scripts/build-from-source.js', 'scripts/clean-package-build.js', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-remote-bye.py', 'scripts/patch-webrtc-media-defaults.sh') }}-${ImageOS:-unknown}" >> "$GITHUB_OUTPUT"
 
       - name: Preserve tested ARM64 addon cache
         uses: actions/upload-artifact@v7
@@ -772,7 +772,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ARTIFACT_NAME: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-media-defaults.sh', 'scripts/stage-webrtc-prebuilt.js') }}
+          ARTIFACT_NAME: libwebrtc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/webrtc-common.cmake', 'cmake/webrtc-linux.cmake', 'scripts/download-webrtc.sh', 'scripts/configure-webrtc.sh', 'scripts/build-webrtc.sh', 'scripts/patch-webrtc-base64.sh', 'scripts/patch-webrtc-modern-cpp.py', 'scripts/patch-webrtc-stopped-stats.py', 'scripts/patch-webrtc-remote-bye.py', 'scripts/patch-webrtc-media-defaults.sh', 'scripts/stage-webrtc-prebuilt.js') }}
         run: |
           artifact_name="$ARTIFACT_NAME-${ImageOS:-unknown}"
           run_id="$(

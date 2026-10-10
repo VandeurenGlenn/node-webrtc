@@ -7,6 +7,8 @@
  */
 #include "src/interfaces/media_stream_track.h"
 
+#include <algorithm>
+
 #include <webrtc/api/peer_connection_interface.h>
 #include <webrtc/rtc_base/crypto_random.h>
 
@@ -57,6 +59,10 @@ MediaStreamTrack::~MediaStreamTrack() {
 
 void MediaStreamTrack::Stop() {
   if (_ended) return;
+  if (_remoteSource) {
+    auto& tracks = _remoteSource->tracks;
+    tracks.erase(std::remove(tracks.begin(), tracks.end(), this), tracks.end());
+  }
   _track->UnregisterObserver(this);
   _ended = true;
   _enabled = _track->enabled();
@@ -70,15 +76,29 @@ void MediaStreamTrack::OnChanged() {
 }
 
 void MediaStreamTrack::InitializeRemote() {
-  if (_remote) return;
-  _remote = true;
+  if (_remoteSource) return;
+  _remoteSource = std::make_shared<RemoteSourceState>();
+  if (!_ended) _remoteSource->tracks.push_back(this);
   _muted = true;
 }
 
 void MediaStreamTrack::SetMuted(bool muted) {
-  if (_ended || _track->state() == webrtc::MediaStreamTrackInterface::kEnded || _muted == muted) return;
-  _muted = muted;
-  MakeCallback(muted ? "_onmute" : "_onunmute", {});
+  if (!_remoteSource || _remoteSource->muted == muted) return;
+  _remoteSource->muted = muted;
+  // Root every recipient before calling JS. A handler may stop another clone
+  // or trigger GC; all live siblings must already expose the new source state.
+  std::vector<Napi::Object> recipients;
+  for (auto track : _remoteSource->tracks) {
+    if (track->_ended || track->_track->state() == webrtc::MediaStreamTrackInterface::kEnded) continue;
+    track->_muted = muted;
+    recipients.push_back(track->Value());
+  }
+  for (auto object : recipients) {
+    auto track = Unwrap(object);
+    if (!track->_ended && track->_muted == muted) {
+      track->MakeCallback(muted ? "_onmute" : "_onunmute", {});
+    }
+  }
 }
 
 void MediaStreamTrack::OnPeerConnectionClosed() {
@@ -139,6 +159,12 @@ Napi::Value MediaStreamTrack::Clone(const Napi::CallbackInfo&) {
     clonedTrack = _factory->factory()->CreateVideoTrack(source, label);
   }
   auto clonedMediaStreamTrack = wrap()->GetOrCreate(_factory, clonedTrack);
+  clonedTrack->set_enabled(_ended ? _enabled : _track->enabled());
+  if (_remoteSource) {
+    clonedMediaStreamTrack->_remoteSource = _remoteSource;
+    clonedMediaStreamTrack->_muted = _muted;
+    _remoteSource->tracks.push_back(clonedMediaStreamTrack);
+  }
   if (_ended) {
     clonedMediaStreamTrack->Stop();
   }
