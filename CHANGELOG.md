@@ -4,6 +4,10 @@ Unreleased
 New Features
 ------------
 
+- Add track capability/constraint APIs with independent clone snapshots,
+  dictionary conversion, Promise-based errors and truthful unsupported-source
+  handling. Report actual video frame settings without copying frame pixels.
+
 - Implement targeted `RTCRtpSender#getStats()` and `RTCRtpReceiver#getStats()`
   using native WebRTC stats selection.
 - Support `RTCPeerConnection#getStats(track)` with track validation and
@@ -14,6 +18,11 @@ New Features
 
 Bug Fixes
 ---------
+
+- Emit source-driven track `ended` events once, after updating readyState;
+  preserve silent explicit stop and independent clone shutdown.
+- Route MediaStream cloning through track cloning, preserving remote source
+  membership, enabled/ended state and constraint snapshots.
 
 - Share remote-track source mute state across clones while preserving independent
   enabled/stop state and stable receiver-track identity; root event recipients

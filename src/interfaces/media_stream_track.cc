@@ -8,8 +8,10 @@
 #include "src/interfaces/media_stream_track.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <webrtc/api/peer_connection_interface.h>
+#include <webrtc/api/video/video_frame.h>
 #include <webrtc/rtc_base/crypto_random.h>
 
 #include "src/converters.h"
@@ -42,6 +44,9 @@ MediaStreamTrack::MediaStreamTrack(const Napi::CallbackInfo& info)
 
   _track = std::move(track);
   _track->RegisterObserver(this);
+  if (_track->kind() == _track->kVideoKind) {
+    static_cast<webrtc::VideoTrackInterface*>(_track.get())->AddOrUpdateSink(this, webrtc::VideoSinkWants());
+  }
 
   // NOTE(mroberts): This doesn't actually matter yet.
   _enabled = false;
@@ -64,6 +69,9 @@ void MediaStreamTrack::Stop() {
     tracks.erase(std::remove(tracks.begin(), tracks.end(), this), tracks.end());
   }
   _track->UnregisterObserver(this);
+  if (_track->kind() == _track->kVideoKind) {
+    static_cast<webrtc::VideoTrackInterface*>(_track.get())->RemoveSink(this);
+  }
   _ended = true;
   _enabled = _track->enabled();
   AsyncObjectWrapWithLoop<MediaStreamTrack>::Stop();
@@ -71,8 +79,31 @@ void MediaStreamTrack::Stop() {
 
 void MediaStreamTrack::OnChanged() {
   if (_track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
-    Dispatch(CreateCallback<MediaStreamTrack>([this]() { Stop(); }));
+    Dispatch(CreateCallback<MediaStreamTrack>([this]() { End(); }));
   }
+}
+
+void MediaStreamTrack::End() {
+  if (_ended) return;
+  // Root the wrapper while Stop releases its event-loop reference. Explicit
+  // stop() never comes through this source-driven event path.
+  auto object = Value();
+  Stop();
+  auto track = Unwrap(object);
+  track->MakeCallback("_onended", {});
+}
+
+void MediaStreamTrack::OnFrame(const webrtc::VideoFrame& frame) {
+  // Metadata only: no pixel copies, JS callbacks or per-frame allocations.
+  std::lock_guard<std::mutex> lock(_settingsMutex);
+  _width = frame.width();
+  _height = frame.height();
+  auto timestamp = frame.timestamp_us();
+  if (_lastFrameTimestamp && timestamp > _lastFrameTimestamp) {
+    auto rate = 1000000.0 / (timestamp - _lastFrameTimestamp);
+    _frameRate = _frameRate ? 0.8 * _frameRate + 0.2 * rate : rate;
+  }
+  _lastFrameTimestamp = timestamp;
 }
 
 void MediaStreamTrack::InitializeRemote() {
@@ -147,6 +178,25 @@ Napi::Value MediaStreamTrack::GetMuted(const Napi::CallbackInfo& info) {
   return result;
 }
 
+Napi::Value MediaStreamTrack::GetRemote(const Napi::CallbackInfo& info) {
+  return Napi::Boolean::New(info.Env(), static_cast<bool>(_remoteSource));
+}
+
+Napi::Value MediaStreamTrack::GetSettings(const Napi::CallbackInfo& info) {
+  auto settings = Napi::Object::New(info.Env());
+  // No camera/device IDs or invented capture configuration. Audio receiver
+  // settings are not defined by WebRTC. Ended tracks expose no frame settings.
+  if (_ended || _track->kind() != _track->kVideoKind) return settings;
+  std::lock_guard<std::mutex> lock(_settingsMutex);
+  if (_width && _height) {
+    settings.Set("width", _width);
+    settings.Set("height", _height);
+    settings.Set("aspectRatio", std::round(static_cast<double>(_width) / _height * 1e10) / 1e10);
+    if (_frameRate > 0) settings.Set("frameRate", _frameRate);
+  }
+  return settings;
+}
+
 Napi::Value MediaStreamTrack::Clone(const Napi::CallbackInfo&) {
   auto label = rtc::CreateRandomUuid();
   rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> clonedTrack = nullptr;
@@ -159,6 +209,14 @@ Napi::Value MediaStreamTrack::Clone(const Napi::CallbackInfo&) {
     clonedTrack = _factory->factory()->CreateVideoTrack(source, label);
   }
   auto clonedMediaStreamTrack = wrap()->GetOrCreate(_factory, clonedTrack);
+  {
+    std::lock_guard<std::mutex> lock(_settingsMutex);
+    std::lock_guard<std::mutex> cloneLock(clonedMediaStreamTrack->_settingsMutex);
+    clonedMediaStreamTrack->_width = _width;
+    clonedMediaStreamTrack->_height = _height;
+    clonedMediaStreamTrack->_frameRate = _frameRate;
+    clonedMediaStreamTrack->_lastFrameTimestamp = _lastFrameTimestamp;
+  }
   clonedTrack->set_enabled(_ended ? _enabled : _track->enabled());
   if (_remoteSource) {
     clonedMediaStreamTrack->_remoteSource = _remoteSource;
@@ -210,7 +268,9 @@ void MediaStreamTrack::Init(Napi::Env env, Napi::Object exports) {
     InstanceAccessor("kind", &MediaStreamTrack::GetKind, nullptr),
     InstanceAccessor("readyState", &MediaStreamTrack::GetReadyState, nullptr),
     InstanceAccessor("muted", &MediaStreamTrack::GetMuted, nullptr),
-    InstanceMethod("clone", &MediaStreamTrack::Clone),
+    InstanceAccessor("_remote", &MediaStreamTrack::GetRemote, nullptr),
+    InstanceMethod("getSettings", &MediaStreamTrack::GetSettings),
+    InstanceMethod("_clone", &MediaStreamTrack::Clone),
     InstanceMethod("stop", &MediaStreamTrack::JsStop)
   });
 

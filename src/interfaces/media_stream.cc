@@ -295,7 +295,7 @@ void MediaStream::Init(Napi::Env env, Napi::Object exports) {
     InstanceMethod("getTrackById", &MediaStream::GetTrackById),
     InstanceMethod("addTrack", &MediaStream::AddTrack),
     InstanceMethod("removeTrack", &MediaStream::RemoveTrack),
-    InstanceMethod("clone", &MediaStream::Clone),
+    InstanceMethod("_clone", &MediaStream::Clone),
   });
 
   constructor() = Napi::Persistent(func);
