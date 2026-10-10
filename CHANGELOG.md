@@ -19,6 +19,10 @@ New Features
 Bug Fixes
 ---------
 
+- Re-enable independent MediaStream clone/stop tests for both audio and video;
+  release native stream proxies and identity-cache entries before factory
+  teardown, with a subprocess regression checking natural suite shutdown.
+
 - Emit source-driven track `ended` events once, after updating readyState;
   preserve silent explicit stop and independent clone shutdown.
 - Route MediaStream cloning through track cloning, preserving remote source
