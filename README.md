@@ -118,6 +118,26 @@ ended tracks no longer receive source mute events. No general RTP-inactivity
 timer is used. All five remote-track-mute WPT subtests pass with generated native
 audio, without changing upstream assertions.
 
+Source-driven track termination emits one `ended` event, including on live
+clones. Explicit `track.stop()` is silent and does not stop siblings.
+`getSettings()` reports the latest delivered video frame's width, height,
+aspect ratio and estimated frame rate; ended tracks and audio receiver tracks
+have no frame settings. These getters return fresh snapshots.
+
+Tracks also expose `getCapabilities()`, `getConstraints()` and Promise-based
+`applyConstraints()`. Remote capabilities are empty, and remote video frame
+constraints reject with `OverconstrainedError` naming the offending constraint.
+Manually fed local sources expose no capture-device capability ranges: required
+capture controls reject rather than pretending to resize or reconfigure media.
+Ideal requests are recorded without guaranteeing media changes. Constraints
+are copied on clone, independent afterwards, and failed requests preserve the
+previous snapshot. `MediaStream.clone()` uses the same track-cloning behavior.
+Unknown dictionary members are ignored.
+
+Hardware capture, device enumeration and capture-device constraint selection
+remain unimplemented. The device-dependent MediaStreamTrack WPT expectations
+remain failures; these APIs do not fabricate device IDs or camera capabilities.
+
 Examples
 --------
 

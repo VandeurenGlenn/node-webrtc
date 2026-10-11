@@ -70,6 +70,10 @@ MediaStream::Impl::Impl(const RTCMediaStreamInit& init,
 }
 
 MediaStream::Impl::~Impl() {
+  // Stream/track proxies must release their native references while the
+  // factory's signaling/worker threads are still alive.
+  _stream = nullptr;
+  if (!_factory) return;
   Napi::HandleScope scope(PeerConnectionFactory::constructor().Env());
   if (_factory) {
     _factory->Unref();  // NOLINT
@@ -96,6 +100,7 @@ rtc::scoped_refptr<webrtc::MediaStreamInterface> MediaStream::stream() {
 }
 
 MediaStream::MediaStream(const Napi::CallbackInfo& info): Napi::ObjectWrap<MediaStream>(info) {
+  napi_add_env_cleanup_hook(info.Env(), ReleaseNativeStream, this);
   auto maybeEither = From<Either<std::tuple<Napi::Object COMMA Napi::External<rtc::scoped_refptr<webrtc::MediaStreamInterface>>> COMMA   // Either1 - Remote MediaStream OR Either2
       Either<std::vector<MediaStreamTrack*> COMMA                                                                  // Either2 - Array of MediaStreamTracks OR Either3
       Either<MediaStream* COMMA                                                                                  // Either3 - Local MediaStream OR Maybe
@@ -143,6 +148,26 @@ MediaStream::MediaStream(const Napi::CallbackInfo& info): Napi::ObjectWrap<Media
       }
     }
   }
+}
+
+MediaStream::~MediaStream() {
+  if (!_environmentReleased) {
+    napi_remove_env_cleanup_hook(Env(), ReleaseNativeStream, this);
+  }
+  wrap()->Release(this);
+}
+
+void MediaStream::ReleaseNativeStream(void* data) {
+  auto stream = static_cast<MediaStream*>(data);
+  stream->_environmentReleased = true;
+  // Both the wrapper and its identity cache own native references. Release
+  // them before finalizers can destroy the signaling/worker threads.
+  wrap()->Release(stream);
+  stream->_impl._stream = nullptr;
+  // Environment finalization owns all remaining JS references. Avoid touching
+  // a factory wrapper from a later finalizer after it may have been freed.
+  stream->_impl._factory = nullptr;
+  stream->_impl._shouldReleaseFactory = false;
 }
 
 Napi::Value MediaStream::GetId(const Napi::CallbackInfo& info) {
@@ -295,7 +320,7 @@ void MediaStream::Init(Napi::Env env, Napi::Object exports) {
     InstanceMethod("getTrackById", &MediaStream::GetTrackById),
     InstanceMethod("addTrack", &MediaStream::AddTrack),
     InstanceMethod("removeTrack", &MediaStream::RemoveTrack),
-    InstanceMethod("clone", &MediaStream::Clone),
+    InstanceMethod("_clone", &MediaStream::Clone),
   });
 
   constructor() = Napi::Persistent(func);

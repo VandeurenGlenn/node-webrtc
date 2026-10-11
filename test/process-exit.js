@@ -4,6 +4,18 @@ var path = require('path');
 var spawnSync = require('child_process').spawnSync;
 var test = require('./lib/test');
 
+test('MediaStream suite exits naturally after local and remote clone cleanup', function(t) {
+  const result = spawnSync(process.execPath, ['--expose-gc', '--test', 'test/mediastream.js'], {
+    cwd: path.resolve(__dirname, '..'),
+    encoding: 'utf8',
+    timeout: 15000
+  });
+  t.ifError(result.error);
+  t.equal(result.signal, null, result.stderr || 'no teardown signal');
+  t.equal(result.status, 0, result.stdout + result.stderr);
+  t.end();
+});
+
 test('closed WebRTC objects exit without a native teardown abort', function(t) {
   var script = [
     'const { RTCPeerConnection } = require(\'./\')',

@@ -28,6 +28,7 @@ class MediaStream
   : public Napi::ObjectWrap<MediaStream> {
  public:
   MediaStream(const Napi::CallbackInfo&);
+  ~MediaStream() override;
 
   static void Init(Napi::Env, Napi::Object);
 
@@ -42,6 +43,8 @@ class MediaStream
   rtc::scoped_refptr<webrtc::MediaStreamInterface> stream();
 
  private:
+  static void ReleaseNativeStream(void*);
+  bool _environmentReleased = false;
   class Impl {
    public:
     Impl& operator=(Impl&& other) noexcept {

@@ -46,7 +46,7 @@ for (const kind of ['audio', 'video']) {
         remote.push(track);
         watch(track);
         if (remote.length === 1) {
-          const clone = track.clone();
+          const [clone] = new wrtc.MediaStream([track]).clone().getTracks();
           const nested = clone.clone();
           clones.push(clone, nested);
           clones.forEach(watch);
@@ -154,6 +154,30 @@ for (const [kind, cached] of [['audio', true], ['audio', false], ['video', true]
       await negotiate(caller, callee);
       const [stopping, active] = callee.getTransceivers();
       await until(() => !stopping.receiver.track.muted && !active.receiver.track.muted);
+      const remote = stopping.receiver.track;
+      const clone = remote.clone();
+      t.after(() => clone.stop());
+      let ended = 0;
+      let cloneEnded = 0;
+      remote.onended = event => {
+        assert.equal(event.target, remote);
+        assert.equal(remote.readyState, 'ended');
+        ended++;
+      };
+      clone.addEventListener('ended', () => cloneEnded++);
+      assert.deepEqual(remote.getCapabilities(), {});
+      if (kind === 'video') {
+        await until(() => remote.getSettings().width === 16);
+        assert.equal(remote.getSettings().height, 16);
+        assert.equal(remote.getSettings().aspectRatio, 1);
+        await assert.rejects(remote.applyConstraints({ width: 16 }), error =>
+          error.name === 'OverconstrainedError' && error.constraint === 'width');
+        await assert.rejects(remote.applyConstraints({ advanced: [{ frameRate: 30 }] }), error =>
+          error.name === 'OverconstrainedError' && error.constraint === 'frameRate');
+      } else {
+        assert.deepEqual(remote.getSettings(), {});
+        await remote.applyConstraints({ width: { exact: 16 } });
+      }
       const inbound = report => [...report.values()].filter(stat => stat.type === 'inbound-rtp');
       const primed = await stopping.receiver.getStats();
       assert.equal(inbound(primed).length, 1);
@@ -170,6 +194,11 @@ for (const [kind, cached] of [['audio', true], ['audio', false], ['video', true]
       assert.equal(inbound(await connectionAfterStop).length, 1, 'other receiver remains in full report');
       assert.equal(inbound(await active.receiver.getStats()).length, 1);
       assert.equal(stopping.receiver.track.readyState, 'ended');
+      await until(() => ended === 1 && cloneEnded === 1);
+      assert.deepEqual(remote.getSettings(), {});
+      await delay(10);
+      assert.equal(ended, 1);
+      assert.equal(cloneEnded, 1);
     });
 }
 

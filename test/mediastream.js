@@ -1,6 +1,8 @@
 'use strict';
 
 var tape = require('./lib/test');
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
 var wrtc = require('..');
 
 var getUserMedia = wrtc.getUserMedia;
@@ -86,13 +88,11 @@ tape('.clone', function(t) {
   return getRemoteMediaStream().then(function(stream1) {
     var stream2 = stream1.clone();
     var stream3 = stream2.clone();
-    // NOTE(mroberts): Weirdly, cloned video MediaStreamTracks have .readyState
-    // "live"; we'll .stop them, at least until that bug is fixed.
-    // stream2.getVideoTracks().forEach(function(track) {
+    t.ok([...stream2.getTracks(), ...stream3.getTracks()].every(track => track.readyState === 'ended'),
+      'clones of ended tracks remain ended');
     stream2.getTracks().forEach(function(track) {
       track.stop();
     });
-    // stream3.getVideoTracks().forEach(function(track) {
     stream3.getTracks().forEach(function(track) {
       track.stop();
     });
@@ -117,36 +117,33 @@ tape('.clone', function(t) {
   });
 });
 
-tape.skip('.clone and .stop', function(t) {
-  getUserMedia({ audio: true }).then(function(stream1) {
-    var track1 = stream1.getTracks()[0];
+for (const kind of ['audio', 'video']) {
+  test(`${kind} MediaStream clone and stop are independent`, async t => {
+    const stream1 = await getUserMedia({ [kind]: true });
+    const [track1] = stream1.getTracks();
+    t.after(() => track1.stop());
+    assert.ok(stream1.active, 'stream1 is active');
+    assert.equal(track1.readyState, 'live', 'track1 is live');
 
-    t.ok(stream1.active, 'stream1 is active');
-    t.equal(track1.readyState, 'live', 'track1 is live');
-
-    var stream2 = stream1.clone();
-    var track2 = stream2.getTracks()[0];
-
-    t.ok(stream2.active, 'stream2 is active');
-    t.equal(track2.readyState, 'live', 'track2 is live');
-    t.notEqual(stream1, stream2, 'stream1 and stream2 are different');
-    t.notEqual(track1, track2, 'track1 and track2 are different');
+    const stream2 = stream1.clone();
+    const [track2] = stream2.getTracks();
+    t.after(() => track2.stop());
+    assert.ok(stream2.active, 'stream2 is active');
+    assert.equal(track2.readyState, 'live', 'track2 is live');
+    assert.notEqual(stream1, stream2, 'streams are different');
+    assert.notEqual(track1, track2, 'tracks are different');
 
     track1.stop();
-
-    t.ok(!stream1.active, 'stream1 is inactive');
-    t.ok(stream2.active, 'stream2 is active');
-    t.equal(track1.readyState, 'ended', 'track1 is ended');
-    t.equal(track2.readyState, 'live', 'track2 is live');
+    assert.ok(!stream1.active, 'stream1 is inactive');
+    assert.ok(stream2.active, 'stream2 is active');
+    assert.equal(track1.readyState, 'ended', 'track1 is ended');
+    assert.equal(track2.readyState, 'live', 'track2 is live');
 
     track2.stop();
-
-    t.ok(!stream2.active, 'stream2 is inactive');
-    t.equal(track2.readyState, 'ended', 'track2 is ended');
-
-    t.end();
+    assert.ok(!stream2.active, 'stream2 is inactive');
+    assert.equal(track2.readyState, 'ended', 'track2 is ended');
   });
-});
+}
 
 tape('.removeTrack and .addTrack on remote MediaStream', function(t) {
   return getRemoteMediaStream().then(function(stream) {
