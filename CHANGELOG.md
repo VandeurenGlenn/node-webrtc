@@ -4,6 +4,10 @@ Unreleased
 New Features
 ------------
 
+- Experimentally reuse detached DataChannel event-batch storage instead of
+  recreating it on every drain. Add concurrent queue and allocation regressions;
+  measured allocation reduction does not yet establish a throughput improvement.
+
 - Add track capability/constraint APIs with independent clone snapshots,
   dictionary conversion, Promise-based errors and truthful unsupported-source
   handling. Report actual video frame settings without copying frame pixels.

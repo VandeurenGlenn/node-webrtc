@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <optional>
 
 #include <node-addon-api/napi.h>
 #include <uv.h>
@@ -47,6 +48,7 @@ class EventLoop: private EventQueue<T> {
     });
 
     _async.data = this;
+    if (_coalesce_events) _batch.emplace();
   }
 
   virtual void DidStop() {
@@ -57,13 +59,17 @@ class EventLoop: private EventQueue<T> {
     Napi::HandleScope scope(_env);
     while (!_should_stop) {
       if (_coalesce_events) {
-        auto events = this->TakeAll();
+        auto& events = *_batch;
+        this->TakeAll(events);
         while (!events.empty()) {
           auto event = std::move(events.front());
           events.pop();
           Napi::CallbackScope callbackScope(_env, *_context);
           event->Dispatch(_target);
           if (_should_stop) {
+            // Drop undispatched payloads now, just like the previous local
+            // batch destructor did; do not retain buffers until wrapper GC.
+            while (!events.empty()) events.pop();
             break;
           }
         }
@@ -117,6 +123,7 @@ class EventLoop: private EventQueue<T> {
   uv_async_t _async{};
   std::atomic<bool> _async_pending = {false};
   const bool _coalesce_events;
+  std::optional<typename EventQueue<T>::Batch> _batch;
   Napi::AsyncContext* _context;
   Napi::Env _env;
   std::mutex _lock{};

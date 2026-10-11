@@ -814,6 +814,8 @@ jobs:
         run: |
           c++ -std=c++20 -pthread -fsanitize=address,undefined -I. test/event-queue.cc -o "$RUNNER_TEMP/event-queue-test"
           "$RUNNER_TEMP/event-queue-test"
+          c++ -std=c++20 -pthread -fsanitize=address,undefined -I. test/event-queue-allocations.cc -o "$RUNNER_TEMP/event-queue-allocations"
+          "$RUNNER_TEMP/event-queue-allocations"
 
   linux-performance-profile:
     name: Linux DataChannel performance profile
