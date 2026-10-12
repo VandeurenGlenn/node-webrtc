@@ -130,7 +130,7 @@ jobs:
 
       - name: Run tooling tests
         run: |
-          node --test test/benchmark-report.js test/benchmark-provenance.js test/rtp-stats-compatibility.js test/wpt-upstream-stats.js test/install-linux-dependencies.js test/webrtc-stats-patch.js
+          node --test test/benchmark-report.js test/benchmark-provenance.js test/parent-performance.js test/rtp-stats-compatibility.js test/wpt-upstream-stats.js test/install-linux-dependencies.js test/webrtc-stats-patch.js
           node scripts/summarize-wpt.js "$RUNNER_TEMP/wpt-summary.json"
 
       - name: Audit dependencies
@@ -824,7 +824,7 @@ jobs:
       - changes
       - source-build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -851,6 +851,45 @@ jobs:
       - name: Install Linux profiler
         timeout-minutes: 10
         run: bash scripts/install-linux-dependencies.sh linux-tools-common linux-tools-generic
+
+      - name: Find verified parent Linux binary
+        id: parent-native
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARENT_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/find-parent-native-baseline.js
+
+      - name: Compare candidate with parent on the same Linux runner
+        if: steps.parent-native.outputs.found == 'true'
+        timeout-minutes: 10
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASELINE_RUN: ${{ steps.parent-native.outputs.run-id }}
+          BASELINE_SOURCE: ${{ steps.parent-native.outputs.source-sha }}
+          PARENT_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          baseline_dir="$RUNNER_TEMP/parent-baseline-addon"
+          mkdir -p performance-profile "$baseline_dir"
+          gh run download "$BASELINE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name wrtc-Linux-X64 --dir "$baseline_dir"
+          archive="$(find "$baseline_dir" -type f -name '*.tar.gz' -print -quit)"
+          test -n "$archive"
+          tar -xzf "$archive" -C "$baseline_dir"
+          node benchmarks/run-paired.js \
+            --baseline-addon "$baseline_dir/Release/wrtc.node" \
+            --baseline-ref "$PARENT_SHA" \
+            --candidate-addon build/Release/wrtc.node \
+            --pairs 10 --iterations 10 --warmup 2 --throughput-messages 10000 \
+            --scenario pc_create_close_ms \
+            --scenario pc_negotiate_datachannel_open_ms \
+            --scenario datachannel_unordered_unreliable_rtt_ms \
+            --scenario datachannel_text_throughput_messages_per_second \
+            --scenario datachannel_binary_throughput_mib_per_second \
+            --output performance-profile/parent-paired.json
+          node scripts/summarize-parent-performance.js performance-profile/parent-paired.json
+          printf '{"parent":"%s","source":"%s","runId":"%s"}\n' \
+            "$PARENT_SHA" "$BASELINE_SOURCE" "$BASELINE_RUN" > performance-profile/parent-provenance.json
 
       - name: Capture binary DataChannel profile
         shell: bash
