@@ -8,6 +8,7 @@
 #pragma once
 
 #include <memory>
+#include <cassert>
 #include <mutex>
 #include <queue>
 
@@ -28,9 +29,16 @@ class EventQueue {
   // Transfer ownership while holding the lock once; callbacks run outside it.
   Batch TakeAll() {
     Batch events;
+    TakeAll(events);
+    return events;
+  }
+
+  // Reuse an emptied consumer batch instead of allocating a fresh deque/map
+  // for every drain. The producer and consumer exchange storage under lock.
+  void TakeAll(Batch& events) {
+    assert(events.empty());
     std::lock_guard<std::mutex> lock(_mutex);
     events.swap(_events);
-    return events;
   }
 
   /**
